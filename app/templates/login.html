@@ -1,0 +1,36 @@
+{% extends "base.html" %}
+{% block title %}Admin Login | StockFlow{% endblock %}
+{% block content %}
+<section class="login-page">
+    <div class="login-card">
+        <div class="login-icon">
+            <i class="fa-solid fa-shield-halved"></i>
+        </div>
+
+        <h2>Admin Login</h2>
+        <p class="login-subtitle">Sign in to access your StockFlow dashboard.</p>
+
+        <form method="POST">
+            {{ form.hidden_tag() }}
+
+            <div class="form-group">
+                {{ form.email.label }}
+                {{ form.email(class="form-control", placeholder="Enter your email") }}
+                {% for error in form.email.errors %}
+                    <small class="field-error">{{ error }}</small>
+                {% endfor %}
+            </div>
+
+            <div class="form-group">
+                {{ form.password.label }}
+                {{ form.password(class="form-control", placeholder="Enter your password") }}
+                {% for error in form.password.errors %}
+                    <small class="field-error">{{ error }}</small>
+                {% endfor %}
+            </div>
+
+            {{ form.submit(class="login-button") }}
+        </form>
+    </div>
+</section>
+{% endblock %}
