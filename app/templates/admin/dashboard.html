@@ -3,11 +3,10 @@
 {% block title %}Admin Dashboard | StockFlow{% endblock %}
 
 {% block content %}
-
-<h1>Admin Dashboard</h1>
-
-<p>
-    Welcome, {{ current_user.full_name }}.
-</p>
-
+<div class="admin-dashboard">
+    <div class="dashboard-header">
+        <h1>Admin Dashboard</h1>
+        <p>Welcome, {{ current_user.full_name }}.</p>
+    </div>
+</div>
 {% endblock %}

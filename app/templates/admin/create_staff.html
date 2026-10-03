@@ -1,0 +1,75 @@
+{% extends "base.html" %}
+
+{% block title %}Create Staff | StockFlow{% endblock %}
+
+{% block content %}
+<section class="staff-page">
+    <div class="page-header">
+        <div>
+            <h1>Create Staff Account</h1>
+            <p>Add a new staff member to your StockFlow system.</p>
+        </div>
+        <a href="{{ url_for('admin_dashboard') }}" class="back-button">
+            <i class="fa-solid fa-arrow-left"></i>
+            Back to Dashboard
+        </a>
+    </div>
+
+    <div class="staff-card">
+        <div class="card-header">
+            <div class="header-icon">
+                <i class="fa-solid fa-user-plus"></i>
+            </div>
+            <div>
+                <h2>Staff Information</h2>
+                <p>Enter the details required to create an account.</p>
+            </div>
+        </div>
+
+        <form method="POST">
+            {{ form.hidden_tag() }}
+
+            <div class="form-group">
+                {{ form.full_name.label }}
+                {{ form.full_name(class="form-control", placeholder="Enter staff full name") }}
+                {% for error in form.full_name.errors %}
+                    <small class="field-error">{{ error }}</small>
+                {% endfor %}
+            </div>
+
+            <div class="form-group">
+                {{ form.email.label }}
+                {{ form.email(class="form-control", placeholder="Enter staff email address") }}
+                {% for error in form.email.errors %}
+                    <small class="field-error">{{ error }}</small>
+                {% endfor %}
+            </div>
+
+            <div class="form-row">
+                <div class="form-group">
+                    {{ form.password.label }}
+                    {{ form.password(class="form-control", placeholder="Create initial password") }}
+                    {% for error in form.password.errors %}
+                        <small class="field-error">{{ error }}</small>
+                    {% endfor %}
+                </div>
+
+                <div class="form-group">
+                    {{ form.confirm_password.label }}
+                    {{ form.confirm_password(class="form-control", placeholder="Confirm password") }}
+                    {% for error in form.confirm_password.errors %}
+                        <small class="field-error">{{ error }}</small>
+                    {% endfor %}
+                </div>
+            </div>
+
+            <div class="form-note">
+                <i class="fa-solid fa-circle-info"></i>
+                <span>The staff account will be created with the staff role.</span>
+            </div>
+
+            {{ form.submit(class="submit-button") }}
+        </form>
+    </div>
+</section>
+{% endblock %}

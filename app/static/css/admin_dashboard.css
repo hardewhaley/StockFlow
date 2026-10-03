@@ -1,0 +1,17 @@
+.admin-dashboard {
+    padding: 30px;
+}
+
+.dashboard-header {
+    margin-bottom: 30px;
+}
+
+.dashboard-header h1 {
+    margin-bottom: 8px;
+    color: #040a1c;
+}
+
+.dashboard-header p {
+    color: #64748b;
+}
+

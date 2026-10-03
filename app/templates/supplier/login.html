@@ -1,0 +1,83 @@
+{% extends "base.html" %}
+
+{% block title %}Supplier Login - StockFlow{% endblock %}
+
+{% block content %}
+
+<section class="auth-page">
+
+    <div class="auth-card">
+
+        <div class="auth-header">
+
+            <div class="auth-icon">
+                <i class="fa-solid fa-truck"></i>
+            </div>
+
+            <h2>Supplier Login</h2>
+
+            <p>
+                Login to your StockFlow supplier account
+            </p>
+
+        </div>
+
+        <form method="POST">
+
+            {{ form.hidden_tag() }}
+
+            <div class="auth-form-group">
+
+                {{ form.email.label }}
+
+                {{ form.email(
+                    placeholder="Enter your email"
+                ) }}
+
+                {% for error in form.email.errors %}
+                    <small class="auth-error">
+                        {{ error }}
+                    </small>
+                {% endfor %}
+
+            </div>
+
+            <div class="auth-form-group">
+
+                {{ form.password.label }}
+
+                {{ form.password(
+                    placeholder="Enter your password"
+                ) }}
+
+                {% for error in form.password.errors %}
+                    <small class="auth-error">
+                        {{ error }}
+                    </small>
+                {% endfor %}
+
+            </div>
+
+            <button type="submit" class="auth-btn">
+                <i class="fa-solid fa-right-to-bracket"></i>
+                Login
+            </button>
+
+        </form>
+
+        <div class="auth-footer">
+
+            <p>
+                Don't have a supplier account?
+                <a href="{{ url_for('supplier_register') }}">
+                    Create Account
+                </a>
+            </p>
+
+        </div>
+
+    </div>
+
+</section>
+
+{% endblock %}

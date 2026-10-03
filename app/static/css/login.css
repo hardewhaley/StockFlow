@@ -90,3 +90,29 @@
     color: #B91C1C;
     font-size: 12px;
 }
+.staff-login-link {
+    text-align: center;
+    margin-top: 22px;
+    padding-top: 20px;
+    border-top: 1px solid #e2e8f0;
+}
+
+.staff-login-link p {
+    margin: 0 0 10px;
+    color: #64748b;
+    font-size: 14px;
+}
+
+.staff-login-link a {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    color: #2563eb;
+    text-decoration: none;
+    font-weight: 600;
+    font-size: 14px;
+}
+
+.staff-login-link a:hover {
+    color: #1d4ed8;
+}

@@ -1,0 +1,76 @@
+{% extends "base.html" %}
+
+{% block title %}Customer Login - StockFlow{% endblock %}
+
+{% block content %}
+
+<div class="auth-page">
+
+    <div class="auth-card">
+
+        <div class="auth-header">
+
+            <div class="auth-icon">
+                <i class="fa-solid fa-user"></i>
+            </div>
+
+            <h2>Customer Login</h2>
+
+            <p>
+                Login to your StockFlow account.
+            </p>
+
+        </div>
+
+        <form method="POST">
+
+            {{ form.hidden_tag() }}
+
+            <div class="auth-form-group">
+
+                {{ form.email.label }}
+
+                {{ form.email(
+                    placeholder="Enter your email"
+                ) }}
+
+                {% for error in form.email.errors %}
+                    <small class="auth-error">{{ error }}</small>
+                {% endfor %}
+
+            </div>
+
+            <div class="auth-form-group">
+
+                {{ form.password.label }}
+
+                {{ form.password(
+                    placeholder="Enter your password"
+                ) }}
+
+                {% for error in form.password.errors %}
+                    <small class="auth-error">{{ error }}</small>
+                {% endfor %}
+
+            </div>
+
+            {{ form.submit(class="auth-btn") }}
+
+        </form>
+
+        <div class="auth-footer">
+
+            <p>
+                Don't have an account?
+                <a href="{{ url_for('customer_register') }}">
+                    Create Account
+                </a>
+            </p>
+
+        </div>
+
+    </div>
+
+</div>
+
+{% endblock %}

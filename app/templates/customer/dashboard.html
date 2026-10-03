@@ -1,0 +1,60 @@
+{% extends "base.html" %}
+
+{% block title %}Shop - StockFlow{% endblock %}
+
+{% block content %}
+<section class="customer-dashboard">
+    <div class="customer-hero">
+        <div class="hero-content">
+            <span class="hero-label">WELCOME TO STOCKFLOW</span>
+            <h1>Find What You Need, <span>Shop With Ease.</span></h1>
+            <p>Browse our products and discover quality items available in StockFlow.</p>
+            <a href="#products" class="hero-btn">
+                Browse Products
+                <i class="fa-solid fa-arrow-right"></i>
+            </a>
+        </div>
+    </div>
+
+    <div class="products-section" id="products">
+        <div class="section-heading">
+            <div>
+                <span>OUR PRODUCTS</span>
+                <h2>Browse Products</h2>
+            </div>
+            <p>Explore the products currently available in our store.</p>
+        </div>
+
+        <div class="product-grid">
+            {% for product in products %}
+                <div class="product-card">
+                    <div class="product-image">
+                        <i class="fa-solid fa-box-open"></i>
+                    </div>
+                    <div class="product-info">
+                        <h3>{{ product.name }}</h3>
+                        <p class="product-description">{{ product.description }}</p>
+                        <div class="product-bottom">
+                            <span class="product-price">₦{{ "{:,.2f}".format(product.price) }}</span>
+                            <span class="product-stock">{{ product.quantity }} available</span>
+                        </div>
+                        <div class="product-actions">
+                            <a href="#" class="product-btn">
+                                <i class="fa-solid fa-cart-shopping"></i>
+                                Add to Cart
+                            </a>
+                            <a href="#" class="view-btn">View</a>
+                        </div>
+                    </div>
+                </div>
+            {% else %}
+                <div class="empty-products">
+                    <i class="fa-solid fa-box-open"></i>
+                    <h3>No Products Available</h3>
+                    <p>There are currently no products available.</p>
+                </div>
+            {% endfor %}
+        </div>
+    </div>
+</section>
+{% endblock %}

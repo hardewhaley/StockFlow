@@ -1,0 +1,138 @@
+{% extends "base.html" %}
+
+{% block title %}Supplier Registration - StockFlow{% endblock %}
+
+{% block content %}
+
+<section class="auth-page">
+
+    <div class="auth-card">
+
+        <div class="auth-header">
+
+            <div class="auth-icon">
+                <i class="fa-solid fa-truck"></i>
+            </div>
+
+            <h2>Supplier Registration</h2>
+
+            <p>
+                Create your StockFlow supplier account
+            </p>
+
+        </div>
+
+        <form method="POST">
+
+            {{ form.hidden_tag() }}
+
+            <div class="auth-form-group">
+                {{ form.full_name.label }}
+
+                {{ form.full_name(
+                    placeholder="Enter your full name"
+                ) }}
+
+                {% for error in form.full_name.errors %}
+                    <small class="auth-error">
+                        {{ error }}
+                    </small>
+                {% endfor %}
+            </div>
+
+            <div class="auth-form-group">
+                {{ form.email.label }}
+
+                {{ form.email(
+                    placeholder="Enter your email"
+                ) }}
+
+                {% for error in form.email.errors %}
+                    <small class="auth-error">
+                        {{ error }}
+                    </small>
+                {% endfor %}
+            </div>
+
+            <div class="auth-form-group">
+                {{ form.phone.label }}
+
+                {{ form.phone(
+                    placeholder="Enter your phone number"
+                ) }}
+
+                {% for error in form.phone.errors %}
+                    <small class="auth-error">
+                        {{ error }}
+                    </small>
+                {% endfor %}
+            </div>
+
+<div class="auth-form-group">
+
+    {{ form.address.label }}
+
+    {{ form.address(
+        rows="4",
+        placeholder="Enter your full address"
+    ) }}
+
+    {% for error in form.address.errors %}
+        <small class="auth-error">
+            {{ error }}
+        </small>
+    {% endfor %}
+
+</div>
+
+            <div class="auth-form-group">
+                {{ form.password.label }}
+
+                {{ form.password(
+                    placeholder="Enter your password"
+                ) }}
+
+                {% for error in form.password.errors %}
+                    <small class="auth-error">
+                        {{ error }}
+                    </small>
+                {% endfor %}
+            </div>
+
+            <div class="auth-form-group">
+                {{ form.confirm_password.label }}
+
+                {{ form.confirm_password(
+                    placeholder="Confirm your password"
+                ) }}
+
+                {% for error in form.confirm_password.errors %}
+                    <small class="auth-error">
+                        {{ error }}
+                    </small>
+                {% endfor %}
+            </div>
+
+            <button type="submit" class="auth-btn">
+                <i class="fa-solid fa-user-plus"></i>
+                Register
+            </button>
+
+        </form>
+
+        <div class="auth-footer">
+
+            <p>
+                Already have a supplier account?
+                <a href="{{ url_for('supplier_login') }}">
+                    Login
+                </a>
+            </p>
+
+        </div>
+
+    </div>
+
+</section>
+
+{% endblock %}

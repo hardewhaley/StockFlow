@@ -1,0 +1,40 @@
+{% extends "base.html" %}
+
+{% block title %}Supplier Dashboard - StockFlow{% endblock %}
+
+{% block content %}
+
+<section class="dashboard-page">
+
+    <div class="dashboard-header">
+        <div>
+            <h1>Welcome, {{ current_user.full_name }}</h1>
+            <p>Manage your supplier activities on StockFlow.</p>
+        </div>
+    </div>
+
+    <div class="dashboard-cards">
+
+        <div class="dashboard-card">
+            <i class="fa-solid fa-box"></i>
+            <h3>My Products</h3>
+            <p>View products supplied by you.</p>
+        </div>
+
+        <div class="dashboard-card">
+            <i class="fa-solid fa-truck"></i>
+            <h3>Supplies</h3>
+            <p>Manage your supplied products.</p>
+        </div>
+
+        <div class="dashboard-card">
+            <i class="fa-solid fa-chart-line"></i>
+            <h3>Reports</h3>
+            <p>View your supplier activity.</p>
+        </div>
+
+    </div>
+
+</section>
+
+{% endblock %}

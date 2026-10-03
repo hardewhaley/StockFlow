@@ -1,0 +1,57 @@
+{% extends "base.html" %}
+
+{% block title %}Staff Dashboard | StockFlow{% endblock %}
+
+{% block content %}
+<section class="staff-dashboard">
+    <div class="dashboard-header">
+        <div>
+            <h1>Staff Dashboard</h1>
+            <p>Welcome back, {{ current_user.full_name }}!</p>
+        </div>
+        <div class="staff-badge">
+            <i class="fa-solid fa-user-tie"></i>
+            Staff Account
+        </div>
+    </div>
+
+    <div class="welcome-card">
+        <div class="welcome-icon">
+            <i class="fa-solid fa-handshake"></i>
+        </div>
+        <div>
+            <h2>Welcome to StockFlow</h2>
+            <p>Manage your daily sales activities and help keep inventory records accurate.</p>
+        </div>
+    </div>
+
+    <div class="dashboard-cards">
+        <div class="dashboard-card">
+            <div class="card-icon sales-icon">
+                <i class="fa-solid fa-cart-shopping"></i>
+            </div>
+            <h3>Sales</h3>
+            <p>Record and manage customer sales.</p>
+            <span>Coming soon</span>
+        </div>
+
+        <div class="dashboard-card">
+            <div class="card-icon product-icon">
+                <i class="fa-solid fa-box"></i>
+            </div>
+            <h3>Products</h3>
+            <p>View available products and their prices.</p>
+            <span>Coming soon</span>
+        </div>
+
+        <div class="dashboard-card">
+            <div class="card-icon stock-icon">
+                <i class="fa-solid fa-boxes-stacked"></i>
+            </div>
+            <h3>Inventory</h3>
+            <p>Check product stock availability.</p>
+            <span>Coming soon</span>
+        </div>
+    </div>
+</section>
+{% endblock %}

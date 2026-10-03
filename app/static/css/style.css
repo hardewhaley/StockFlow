@@ -186,6 +186,24 @@ button {
     color: #6B7280;
     font-size: 14px;
 }
+.footer-links {
+    margin-top: 6px;
+    font-size: 13px;
+}
+
+.footer-links a {
+    color: #6B7280;
+    text-decoration: none;
+}
+
+.footer-links a:hover {
+    color: #2563EB;
+}
+
+.footer-links span {
+    margin: 0 6px;
+    color: #9CA3AF;
+}
 .logout-link {
     display: flex;
     align-items: center;
@@ -251,4 +269,25 @@ button {
     .flash-container {
         padding: 15px 15px 0;
     }
+}
+.no-sidebar .main-container {
+    margin-left: 0;
+    padding-left: 0;
+    width: 100%;
+    max-width: 100%;
+}
+.navbar-links {
+    display: flex;
+    gap: 24px;
+    margin-left: 40px;
+}
+
+.navbar-links a {
+    color: #374151;
+    text-decoration: none;
+    font-weight: 500;
+}
+
+.navbar-links a:hover {
+    color: #2563EB;
 }

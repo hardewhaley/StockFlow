@@ -6,37 +6,83 @@
     <title>{% block title %}StockFlow{% endblock %}</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/login.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/create_staff.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/staff_dashboard.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/staff_login.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/admin_dashboard.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/customer_auth.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/customer_dashboard.css') }}">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.7.2/css/all.min.css">
 </head>
 <body>
-    <div class="app-container">
+    {% set show_sidebar = current_user.is_authenticated and current_user.role in ['admin', 'staff'] %}
+
+    <div class="app-container {% if not show_sidebar %}no-sidebar{% endif %}">
+
+{% if show_sidebar %}
 <aside class="sidebar" id="sidebar">
     <div class="sidebar-header">
         <h2>Stock<span>Flow</span></h2>
     </div>
     <nav class="sidebar-nav">
-        <a href="#" class="nav-link active"><i class="fa-solid fa-house"></i><span>Dashboard</span></a>
-        <a href="#" class="nav-link"><i class="fa-solid fa-box"></i><span>Products</span></a>
-        <a href="#" class="nav-link"><i class="fa-solid fa-layer-group"></i><span>Categories</span></a>
-        <a href="#" class="nav-link"><i class="fa-solid fa-users"></i><span>Customers</span></a>
-        <a href="#" class="nav-link"><i class="fa-solid fa-truck"></i><span>Suppliers</span></a>
-        <a href="#" class="nav-link"><i class="fa-solid fa-cart-shopping"></i><span>Sales</span></a>
-        <a href="#" class="nav-link"><i class="fa-solid fa-boxes-stacked"></i><span>Stock</span></a>
-        <a href="#" class="nav-link"><i class="fa-solid fa-chart-line"></i><span>Reports</span></a>
+        {% if current_user.role == 'admin' %}
+            <a href="{{ url_for('admin_dashboard') }}" class="nav-link {% if request.endpoint == 'admin_dashboard' %}active{% endif %}"><i class="fa-solid fa-house"></i><span>Dashboard</span></a>
+            <a href="#" class="nav-link"><i class="fa-solid fa-box"></i><span>Products</span></a>
+            <a href="#" class="nav-link"><i class="fa-solid fa-layer-group"></i><span>Categories</span></a>
+            <a href="#" class="nav-link"><i class="fa-solid fa-users"></i><span>Customers</span></a>
+            <a href="#" class="nav-link"><i class="fa-solid fa-truck"></i><span>Suppliers</span></a>
+            <a href="#" class="nav-link"><i class="fa-solid fa-cart-shopping"></i><span>Sales</span></a>
+            <a href="#" class="nav-link"><i class="fa-solid fa-boxes-stacked"></i><span>Stock</span></a>
+            <a href="#" class="nav-link"><i class="fa-solid fa-chart-line"></i><span>Reports</span></a>
+            <a href="{{ url_for('create_staff') }}" class="nav-link {% if request.endpoint == 'create_staff' %}active{% endif %}"><i class="fa-solid fa-user-plus"></i><span>Create Staff</span></a>
+        {% else %}
+            <a href="{{ url_for('staff_dashboard') }}" class="nav-link {% if request.endpoint == 'staff_dashboard' %}active{% endif %}"><i class="fa-solid fa-house"></i><span>Dashboard</span></a>
+            <a href="#" class="nav-link"><i class="fa-solid fa-box"></i><span>Products</span></a>
+            <a href="#" class="nav-link"><i class="fa-solid fa-cart-shopping"></i><span>Sales</span></a>
+            <a href="#" class="nav-link"><i class="fa-solid fa-boxes-stacked"></i><span>Stock</span></a>
+        {% endif %}
     </nav>
 </aside>
-        <div class="overlay" id="overlay"></div>
+<div class="overlay" id="overlay"></div>
+{% endif %}
         <div class="main-container">
             <header class="navbar">
-                <button class="menu-toggle" id="menuToggle"><i class="fa-solid fa-bars"></i></button>
+                {% if show_sidebar %}
+                    <button class="menu-toggle" id="menuToggle"><i class="fa-solid fa-bars"></i></button>
+                {% endif %}
+
                 <div class="navbar-title"><h3>StockFlow</h3></div>
-               -<div class="navbar-user"><i class="fa-solid fa-circle-user"></i>
-                <span>{{ current_user.full_name }}</span>
-                <a href="{{ url_for('logout') }}" class="logout-link"><i class="fa-solid fa-right-from-bracket"></i>
-                 <span>Logout</span>
-                </a>
-        </div>
+
+                {% if not show_sidebar %}
+                    <nav class="navbar-links">
+                        <a href="{{ url_for('home') }}">Shop</a>
+                        <a href="#">Cart</a>
+                        <a href="#">My Orders</a>
+                    </nav>
+                {% endif %}
+
+                <div class="navbar-user">
+                    {% if current_user.is_authenticated %}
+                        <i class="fa-solid fa-circle-user"></i>
+                        <span>{{ current_user.full_name }}</span>
+                        {% if current_user.role == 'customer' %}
+                            {% set logout_endpoint = 'customer_logout' %}
+                        {% elif current_user.role == 'supplier' %}
+                            {% set logout_endpoint = 'supplier_logout' %}
+                        {% else %}
+                            {% set logout_endpoint = 'logout' %}
+                        {% endif %}
+                        <a href="{{ url_for(logout_endpoint) }}" class="logout-link">
+                            <i class="fa-solid fa-right-from-bracket"></i>
+                            <span>Logout</span>
+                        </a>
+                    {% else %}
+                        <a href="{{ url_for('customer_login') }}" class="logout-link"><span>Login</span></a>
+                        <a href="{{ url_for('customer_register') }}" class="logout-link"><span>Register</span></a>
+                    {% endif %}
+                </div>
             </header>
+
             <div class="flash-container">
                 {% with messages = get_flashed_messages(with_categories=true) %}
                     {% for category, message in messages %}
@@ -47,43 +93,47 @@
                     {% endfor %}
                 {% endwith %}
             </div>
+
             <main class="content">
                 {% block content %}{% endblock %}
             </main>
+
             <footer class="footer">
                 <p>&copy; 2026 StockFlow. All rights reserved.</p>
+                {% if not current_user.is_authenticated %}
+                    <p class="footer-links">
+                        <a href="{{ url_for('staff_login') }}">Staff Login</a>
+                        <span>·</span>
+                        <a href="{{ url_for('login') }}">Admin Login</a>
+                        <span>·</span>
+                        <a href="{{ url_for('supplier_login') }}">Supplier Login</a>
+                        <span>·</span>
+                        <a href="{{ url_for('supplier_register') }}">Supplier Register</a>
+                    </p>
+                {% endif %}
             </footer>
-        </div>
-    </div>
+
     <script>
-    const sidebar = document.getElementById('sidebar');
-    const overlay = document.getElementById('overlay');
-    const menuToggle = document.getElementById('menuToggle');
+        const sidebar = document.getElementById('sidebar');
+        const overlay = document.getElementById('overlay');
+        const menuToggle = document.getElementById('menuToggle');
 
-    function setSidebar(open) {
-        sidebar.classList.toggle('show', open);
-        overlay.classList.toggle('show', open);
-    }
-
-    menuToggle.addEventListener('click', () => {
-        setSidebar(!sidebar.classList.contains('show'));
-    });
-
-    overlay.addEventListener('click', () => {
-        setSidebar(false);
-    });
-
-    document.addEventListener('keydown', event => {
-        if (event.key === 'Escape') {
-            setSidebar(false);
+        function setSidebar(open) {
+            sidebar.classList.toggle('show', open);
+            overlay.classList.toggle('show', open);
         }
-    });
 
-    document.querySelectorAll('.flash-close').forEach(button => {
-        button.addEventListener('click', () => {
-            button.parentElement.remove();
+        if (sidebar && overlay && menuToggle) {
+            menuToggle.addEventListener('click', () => setSidebar(!sidebar.classList.contains('show')));
+            overlay.addEventListener('click', () => setSidebar(false));
+            document.addEventListener('keydown', event => {
+                if (event.key === 'Escape') setSidebar(false);
+            });
+        }
+
+        document.querySelectorAll('.flash-close').forEach(button => {
+            button.addEventListener('click', () => button.parentElement.remove());
         });
-    });
-</script>
+    </script>
 </body>
 </html>
