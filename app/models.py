@@ -12,6 +12,7 @@ class User(UserMixin, db.Model):
     full_name = db.Column(db.String(100), nullable=False)
     email = db.Column(db.String(120), unique=True, nullable=False)
     password = db.Column(db.String(255), nullable=False)
+    staff_code = db.Column(db.String(50), unique=True, nullable=True)
     role = db.Column(db.String(20), nullable=False, default='staff')
 
     sales = db.relationship('Sale', backref='user', lazy=True)
@@ -36,26 +37,23 @@ class Customer(UserMixin, db.Model):
         return f"customer:{self.id}"
 
 
-class Supplier(UserMixin, db.Model):
+class Supplier(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     full_name = db.Column(db.String(100), nullable=False)
     email = db.Column(db.String(120), unique=True, nullable=False)
     phone = db.Column(db.String(20), unique=True, nullable=False)
     address = db.Column(db.String(255), nullable=False)
-    password = db.Column(db.String(255), nullable=False)
     created_at = db.Column(db.DateTime, default=utc_now)
+    is_active = db.Column(db.Boolean, default=True, nullable=False)
 
-    role = 'supplier'
 
     products = db.relationship('Product', backref='supplier', lazy=True)
-
-    def get_id(self):
-        return f"supplier:{self.id}"
 
 class Category(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String(100), unique=True, nullable=False)
     description = db.Column(db.String(300), nullable=True)
+    is_active = db.Column(db.Boolean, default=True, nullable=False)
 
     products = db.relationship('Product', backref='category', lazy=True)
 
@@ -64,7 +62,8 @@ class Product(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String(100), unique=True, nullable=False)
     description = db.Column(db.String(300), nullable=True)
-    price = db.Column(db.Float, nullable=False)
+    purchase_price = db.Column(db.Float, nullable=True)
+    selling_price = db.Column(db.Float, nullable=True)
     quantity = db.Column(db.Integer, nullable=False, default=0)
     category_id = db.Column(db.Integer, db.ForeignKey('category.id'), nullable=False)
     supplier_id = db.Column(db.Integer, db.ForeignKey('supplier.id'), nullable=False)

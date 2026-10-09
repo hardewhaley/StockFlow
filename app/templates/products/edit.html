@@ -1,0 +1,110 @@
+{% extends "base.html" %}
+
+{% block title %}Edit Product | StockFlow{% endblock %}
+
+{% block content %}
+{% set f = request.form %}
+{% set chosen_category = f.get('category_id', product.category_id|string) %}
+{% set chosen_supplier = f.get('supplier_id', product.supplier_id|string) %}
+
+<section class="product-form-page">
+
+    <header class="page-header">
+        <div>
+            <h1>Edit Product</h1>
+            <p>Update the details of this inventory item.</p>
+        </div>
+
+        <a href="{{ url_for('products') }}" class="btn-back">
+            <i class="fa-solid fa-arrow-left"></i>
+            Back to Products
+        </a>
+    </header>
+
+    <div class="product-form-card">
+        <form method="POST" action="{{ url_for('edit_product', product_id=product.id) }}">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+            <div class="form-section">
+                <h2>Product Information</h2>
+
+                <div class="form-grid">
+                    <div class="form-group">
+                        <label for="name">Product Name *</label>
+                        <input type="text" id="name" name="name"
+                               value="{{ f.get('name', product.name) }}"
+                               maxlength="100" required>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="category_id">Category *</label>
+                        <select id="category_id" name="category_id" required>
+                            {% for category in categories %}
+                            <option value="{{ category.id }}"
+                                {% if chosen_category == category.id|string %}selected{% endif %}>
+                                {{ category.name }}{% if not category.is_active %} (disabled){% endif %}
+                            </option>
+                            {% endfor %}
+                        </select>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="supplier_id">Supplier *</label>
+                        <select id="supplier_id" name="supplier_id" required>
+                            {% for supplier in suppliers %}
+                            <option value="{{ supplier.id }}"
+                                {% if chosen_supplier == supplier.id|string %}selected{% endif %}>
+                                {{ supplier.full_name }}{% if not supplier.is_active %} (inactive){% endif %}
+                            </option>
+                            {% endfor %}
+                        </select>
+                    </div>
+
+                    <div class="form-group full-width">
+                        <label for="description">Description</label>
+                        <textarea id="description" name="description"
+                                  maxlength="300" rows="4">{{ f.get('description', product.description or '') }}</textarea>
+                    </div>
+                </div>
+            </div>
+
+            <div class="form-section">
+                <h2>Pricing and Stock</h2>
+
+                <div class="form-grid">
+                    <div class="form-group">
+                        <label for="purchase_price">Purchase Price (₦) *</label>
+                        <input type="number" id="purchase_price" name="purchase_price"
+                               min="0" step="0.01" inputmode="decimal"
+                               value="{{ f.get('purchase_price', product.purchase_price) }}" required>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="selling_price">Selling Price (₦) *</label>
+                        <input type="number" id="selling_price" name="selling_price"
+                               min="0" step="0.01" inputmode="decimal"
+                               value="{{ f.get('selling_price', product.selling_price) }}" required>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="quantity">Quantity *</label>
+                        <input type="number" id="quantity" name="quantity"
+                               min="0" step="1" inputmode="numeric"
+                               value="{{ f.get('quantity', product.quantity) }}" required>
+                    </div>
+                </div>
+            </div>
+
+            <div class="form-actions">
+                <a href="{{ url_for('products') }}" class="btn-cancel">Cancel</a>
+
+                <button type="submit" class="btn-save-product">
+                    <i class="fa-solid fa-floppy-disk"></i>
+                    Save Changes
+                </button>
+            </div>
+        </form>
+    </div>
+
+</section>
+{% endblock %}

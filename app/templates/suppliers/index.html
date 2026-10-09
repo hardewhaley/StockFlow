@@ -1,0 +1,146 @@
+
+{% extends "base.html" %}
+
+{% block title %}Suppliers | StockFlow{% endblock %}
+
+{% block content %}
+
+<div class="products-page">
+
+    <div class="page-header">
+        <div>
+            <h1>Suppliers</h1>
+            <p>Manage your supplier information.</p>
+        </div>
+
+        <a href="{{ url_for('add_supplier') }}"
+           class="btn-add-product">
+            <i class="fa-solid fa-plus"></i>
+            Add Supplier
+        </a>
+    </div>
+
+    <div class="products-summary">
+
+        <div class="summary-card">
+            <div class="summary-icon">
+                <i class="fa-solid fa-users"></i>
+            </div>
+            <div>
+                <p>Total Suppliers</p>
+                <h3>{{ suppliers|length }}</h3>
+            </div>
+        </div>
+
+        <div class="summary-card">
+            <div class="summary-icon">
+                <i class="fa-solid fa-user-check"></i>
+            </div>
+            <div>
+                <p>Active Suppliers</p>
+                <h3>{{ suppliers|selectattr('is_active')|list|length }}</h3>
+            </div>
+        </div>
+
+    </div>
+
+    <div class="products-table-card">
+
+        <div class="table-heading">
+            <h2>All Suppliers</h2>
+            <span>{{ suppliers|length }} supplier(s)</span>
+        </div>
+
+        <div class="table-responsive">
+            <table class="products-table">
+
+                <thead>
+                    <tr>
+                        <th>#</th>
+                        <th>Supplier Name</th>
+                        <th>Email</th>
+                        <th>Phone</th>
+                        <th>Address</th>
+                        <th>Status</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+
+                <tbody>
+                    {% for supplier in suppliers %}
+                    <tr>
+                        <td>{{ loop.index }}</td>
+
+                        <td>
+                            <div class="product-name">
+                                <strong>{{ supplier.full_name }}</strong>
+                                <small>
+                                    Added
+                                    {{ supplier.created_at.strftime('%d %b %Y')
+                                       if supplier.created_at
+                                       else 'Date unavailable' }}
+                                </small>
+                            </div>
+                        </td>
+
+                        <td>{{ supplier.email }}</td>
+                        <td>{{ supplier.phone }}</td>
+                        <td>{{ supplier.address }}</td>
+
+                        <td>
+                            {% if supplier.is_active %}
+                                <span class="quantity-badge in-stock">
+                                    Active
+                                </span>
+                            {% else %}
+                                <span class="quantity-badge out-of-stock">
+                                    Inactive
+                                </span>
+                            {% endif %}
+                        </td>
+
+                        <td>
+                            <div class="product-actions">
+                                <a href="{{ url_for('edit_supplier', supplier_id=supplier.id) }}"
+                                   class="btn-edit"
+                                   title="Edit supplier">
+                                    <i class="fa-solid fa-pen"></i>
+                                </a>
+
+                                <form method="POST"
+                                      action="{{ url_for('toggle_supplier_status', supplier_id=supplier.id) }}"
+                                      onsubmit="return confirm('Change this supplier’s status?');">
+
+                                    <input type="hidden"
+                                           name="csrf_token"
+                                           value="{{ csrf_token() }}">
+
+                                    <button type="submit"
+                                            class="btn-delete"
+                                            title="Activate or deactivate supplier">
+                                        <i class="fa-solid fa-user-slash"></i>
+                                    </button>
+                                </form>
+                            </div>
+                        </td>
+                    </tr>
+
+                    {% else %}
+                    <tr>
+                        <td colspan="7" class="empty-products">
+                            <i class="fa-solid fa-users"></i>
+                            <h3>No suppliers yet</h3>
+                            <p>Add your first supplier to get started.</p>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+
+            </table>
+        </div>
+
+    </div>
+
+</div>
+
+{% endblock %}

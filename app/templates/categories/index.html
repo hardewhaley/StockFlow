@@ -1,0 +1,93 @@
+{% extends "base.html" %}
+
+{% block title %}Categories | StockFlow{% endblock %}
+
+{% block content %}
+<section class="categories-page">
+
+    <header class="page-header">
+        <div>
+            <h2>Category Management</h2>
+            <p>Organize and manage your product categories.</p>
+        </div>
+
+        <a href="{{ url_for('add_category') }}" class="btn-primary">
+            <i class="fa-solid fa-plus"></i>
+            Add Category
+        </a>
+    </header>
+
+    <div class="category-card">
+        <div class="table-responsive">
+            <table class="category-table">
+                <thead>
+                    <tr>
+                        <th>#</th>
+                        <th>Category</th>
+                        <th>Description</th>
+                        <th>Products</th>
+                        <th>Status</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+
+                <tbody>
+                    {% for category in categories %}
+                    {% set action_text = 'Disable' if category.is_active else 'Enable' %}
+
+                    <tr {% if not category.is_active %}class="row-disabled"{% endif %}>
+                        <td>{{ loop.index }}</td>
+                        <td class="category-name">{{ category.name }}</td>
+                        <td>{{ category.description or 'No description' }}</td>
+                        <td>{{ category.products|length }}</td>
+
+                        <td>
+                            {% if category.is_active %}
+                                <span class="status-badge status-enabled">Enabled</span>
+                            {% else %}
+                                <span class="status-badge status-disabled">Disabled</span>
+                            {% endif %}
+                        </td>
+
+                        <td>
+                            <div class="category-actions">
+                                <a href="{{ url_for('edit_category', id=category.id) }}"
+                                   class="btn-edit"
+                                   aria-label="Edit {{ category.name }}">
+                                    <i class="fa-solid fa-pen"></i> Edit
+                                </a>
+
+                                <form method="POST"
+                                      action="{{ url_for('toggle_category_status', id=category.id) }}"
+                                      onsubmit="return confirm('{{ action_text }} this category?');">
+                                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+                                    {% if category.is_active %}
+                                        <button type="submit" class="btn-delete" aria-label="Disable {{ category.name }}">
+                                            <i class="fa-solid fa-ban"></i> Disable
+                                        </button>
+                                    {% else %}
+                                        <button type="submit" class="btn-enable" aria-label="Enable {{ category.name }}">
+                                            <i class="fa-solid fa-circle-check"></i> Enable
+                                        </button>
+                                    {% endif %}
+                                </form>
+                            </div>
+                        </td>
+                    </tr>
+
+                    {% else %}
+                    <tr>
+                        <td colspan="6" class="empty-state">
+                            <i class="fa-solid fa-layer-group"></i>
+                            <p>No categories yet. Click "Add Category" to create your first one.</p>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+</section>
+{% endblock %}

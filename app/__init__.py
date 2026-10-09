@@ -4,6 +4,8 @@ from dotenv import load_dotenv
 from flask_sqlalchemy import SQLAlchemy
 from flask_login import LoginManager
 from flask_mail import Mail
+from flask_migrate import Migrate
+from flask_wtf.csrf import CSRFProtect, generate_csrf
 
 load_dotenv(
     os.path.join(
@@ -25,8 +27,13 @@ app.config['MAIL_USERNAME'] = os.getenv('MAIL_USERNAME')
 app.config['MAIL_PASSWORD'] = os.getenv('MAIL_PASSWORD')
 app.config['MAIL_DEFAULT_SENDER'] = os.getenv('MAIL_USERNAME')
 
-db= SQLAlchemy(app)
+db = SQLAlchemy(app)
+migrate = Migrate(app, db)
 login_manager = LoginManager(app)
+
+csrf = CSRFProtect(app)
+app.jinja_env.globals['csrf_token'] = generate_csrf
+
 
 
 @login_manager.unauthorized_handler
@@ -35,9 +42,6 @@ def unauthorized():
 
     if request.path.startswith('/customer'):
         return redirect(url_for('customer_login'))
-    
-    if request.path.startswith('/supplier'):
-        return redirect(url_for('supplier_login'))
 
     if request.path.startswith('/staff'):
         return redirect(url_for('staff_login'))

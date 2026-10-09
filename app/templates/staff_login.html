@@ -1,15 +1,15 @@
 {% extends "base.html" %}
 
 {% block content %}
-
 <div class="staff-login-page">
     <div class="staff-login-container">
+
         <div class="staff-login-header">
             <div class="staff-login-icon">
                 <i class="fa-solid fa-user-tie"></i>
             </div>
             <h2>Staff Login</h2>
-            <p>Sign in to access your StockFlow staff account.</p>
+            <p>Sign in using your StockFlow staff email and staff code.</p>
         </div>
 
         <form method="POST" class="staff-login-form">
@@ -27,15 +27,15 @@
             </div>
 
             <div class="form-group">
-                {{ form.password.label }}
+                {{ form.staff_code.label }}
                 <div class="input-box">
-                    <i class="fa-solid fa-lock"></i>
-                    {{ form.password(placeholder="Enter your password", id="password") }}
-                    <button type="button" class="password-toggle" id="togglePassword">
+                    <i class="fa-solid fa-key"></i>
+                    {{ form.staff_code(placeholder="Enter your staff code", id="staffCode") }}
+                    <button type="button" class="password-toggle" id="toggleStaffCode">
                         <i class="fa-solid fa-eye"></i>
                     </button>
                 </div>
-                {% for error in form.password.errors %}
+                {% for error in form.staff_code.errors %}
                     <small class="form-error">{{ error }}</small>
                 {% endfor %}
             </div>
@@ -46,17 +46,20 @@
         <div class="staff-login-footer">
             <p>Authorized StockFlow staff only.</p>
         </div>
+
     </div>
 </div>
 
 <script>
-    const password = document.getElementById("password");
-    const togglePassword = document.getElementById("togglePassword");
+    const staffCode = document.getElementById("staffCode");
+    const toggleStaffCode = document.getElementById("toggleStaffCode");
 
-    togglePassword.addEventListener("click", function () {
-        password.type = password.type === "password" ? "text" : "password";
-        this.querySelector("i").classList.toggle("fa-eye");
-        this.querySelector("i").classList.toggle("fa-eye-slash");
+    toggleStaffCode.addEventListener("click", function () {
+        staffCode.type = staffCode.type === "password" ? "text" : "password";
+
+        const icon = this.querySelector("i");
+        icon.classList.toggle("fa-eye");
+        icon.classList.toggle("fa-eye-slash");
     });
 </script>
 {% endblock %}
