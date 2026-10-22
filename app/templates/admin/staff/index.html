@@ -1,0 +1,69 @@
+{% extends "base.html" %}
+
+{% block title %}Staff Management | StockFlow{% endblock %}
+
+{% block content %}
+<section class="staff-page">
+
+    <header class="page-header">
+        <div>
+            <h1>Staff Management</h1>
+            <p>View and manage your StockFlow staff members.</p>
+        </div>
+
+        <a href="{{ url_for('create_staff') }}" class="btn-primary">
+            <i class="fa-solid fa-user-plus"></i>
+            Create Staff Account
+        </a>
+    </header>
+
+    <div class="staff-card">
+
+        <div class="table-heading">
+            <h2>All Staff</h2>
+            <span>{{ staff_members|length }} member(s)</span>
+        </div>
+
+        <div class="table-responsive">
+            <table class="staff-table">
+                <thead>
+                    <tr>
+                        <th>#</th>
+                        <th>Full Name</th>
+                        <th>Email Address</th>
+                        <th>Role</th>
+                        <th>Action</th>
+                    </tr>
+                </thead>
+
+                <tbody>
+                    {% for staff in staff_members %}
+                    <tr>
+                        <td data-label="#">{{ loop.index }}</td>
+                        <td data-label="Full Name" class="staff-name">{{ staff.full_name }}</td>
+                        <td data-label="Email" class="staff-email">{{ staff.email }}</td>
+                        <td data-label="Role">
+                            <span class="role-badge">{{ staff.role|capitalize }}</span>
+                        </td>
+                        <td data-label="Action">
+                            <a href="{{ url_for('staff_detail', staff_id=staff.id) }}" class="btn-view">
+                                <i class="fa-solid fa-eye"></i>
+                                View Details
+                            </a>
+                        </td>
+                    </tr>
+                    {% else %}
+                    <tr>
+                        <td colspan="5" class="staff-empty">
+                            <i class="fa-solid fa-users"></i>
+                            <p>No staff accounts found. Create your first staff account to get started.</p>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+</section>
+{% endblock %}

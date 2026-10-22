@@ -1,0 +1,65 @@
+{% extends "base.html" %}
+
+{% block title %}Staff Details | StockFlow{% endblock %}
+
+{% block content %}
+<section class="staff-page">
+
+    <header class="page-header">
+        <div>
+            <h1>Staff Details</h1>
+            <p>View this staff member's account information.</p>
+        </div>
+
+        <a href="{{ url_for('staff_list') }}" class="btn-back">
+            <i class="fa-solid fa-arrow-left"></i>
+            Back to Staff
+        </a>
+    </header>
+
+    <div class="staff-form-card">
+
+        <div class="card-heading">
+            <div class="heading-icon">
+                <i class="fa-solid fa-user-tie"></i>
+            </div>
+            <div>
+                <h2>{{ staff.full_name }}</h2>
+                <p>Staff account information</p>
+            </div>
+        </div>
+
+        <div class="detail-grid">
+            <div class="detail-item">
+                <span class="detail-label">Full Name</span>
+                <p>{{ staff.full_name }}</p>
+            </div>
+
+            <div class="detail-item">
+                <span class="detail-label">Email Address</span>
+                <p>{{ staff.email }}</p>
+            </div>
+
+            <div class="detail-item">
+                <span class="detail-label">Role</span>
+                <p>{{ staff.role|capitalize }}</p>
+            </div>
+
+            <div class="detail-item">
+                <span class="detail-label">Staff ID</span>
+                <p>STF-{{ "%04d"|format(staff.id) }}</p>
+            </div>
+        </div>
+
+        <div class="form-actions">
+            <a href="{{ url_for('staff_list') }}" class="btn-cancel">Back to Staff List</a>
+
+            <a href="{{ url_for('edit_staff', staff_id=staff.id) }}" class="btn-save">
+                <i class="fa-solid fa-user-pen"></i>
+                Edit Staff
+            </a>
+        </div>
+    </div>
+
+</section>
+{% endblock %}

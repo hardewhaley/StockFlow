@@ -5,90 +5,170 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{% block title %}StockFlow{% endblock %}</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/customer_navbar.css') }}">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/login.css') }}">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/create_staff.css') }}">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/staff_dashboard.css') }}">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/staff_login.css') }}">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/admin_dashboard.css') }}">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/customer_auth.css') }}">
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/customer_dashboard.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/customer.css') }}">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/categories.css') }}">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/products.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/stock.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/supplier.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/checkout.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/orders.css') }}">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.7.2/css/all.min.css">
 </head>
 <body>
     {% set show_sidebar = current_user.is_authenticated and current_user.role in ['admin', 'staff'] %}
 
+    {% set cart_count = namespace(total=0) %}
+    {% for quantity in session.get('cart', {}).values() %}
+        {% set cart_count.total = cart_count.total + (quantity | int) %}
+    {% endfor %}
+
+    {% if current_user.is_authenticated and current_user.role == 'customer' %}
+        {% set logout_endpoint = 'customer_logout' %}
+    {% else %}
+        {% set logout_endpoint = 'logout' %}
+    {% endif %}
+
     <div class="app-container {% if not show_sidebar %}no-sidebar{% endif %}">
 
-{% if show_sidebar %}
-<aside class="sidebar" id="sidebar">
-    <div class="sidebar-header">
-        <h2>Stock<span>Flow</span></h2>
-    </div>
-    <nav class="sidebar-nav">
-        {% if current_user.role == 'admin' %}
-            <a href="{{ url_for('admin_dashboard') }}" class="nav-link {% if request.endpoint == 'admin_dashboard' %}active{% endif %}"><i class="fa-solid fa-house"></i><span>Dashboard</span></a>
-            <a href="{{ url_for('products') }}" class="nav-link"><i class="fa-solid fa-box"></i><span>Products</span></a>
-            <a href="{{ url_for('categories') }}" class="nav-link"><i class="fa-solid fa-layer-group"></i><span>Categories</span></a>
-            <a href="#" class="nav-link"><i class="fa-solid fa-users"></i><span>Customers</span></a>
-            <a href="{{ url_for('suppliers') }}" class="nav-link"><i class="fa-solid fa-truck"></i><span>Suppliers</span></a>
-            <a href="#" class="nav-link"><i class="fa-solid fa-cart-shopping"></i><span>Sales</span></a>
-            <a href="#" class="nav-link"><i class="fa-solid fa-boxes-stacked"></i><span>Stock</span></a>
-            <a href="#" class="nav-link"><i class="fa-solid fa-chart-line"></i><span>Reports</span></a>
-            <a href="{{ url_for('create_staff') }}" class="nav-link {% if request.endpoint == 'create_staff' %}active{% endif %}"><i class="fa-solid fa-user-plus"></i><span>Create Staff</span></a>
-        {% else %}
-            <a href="{{ url_for('staff_dashboard') }}" class="nav-link {% if request.endpoint == 'staff_dashboard' %}active{% endif %}"><i class="fa-solid fa-house"></i><span>Dashboard</span></a>
-            <a href="{{ url_for('products') }}" class="nav-link"><i class="fa-solid fa-box"></i><span>Products</span></a>
-            <a href="#" class="nav-link"><i class="fa-solid fa-cart-shopping"></i><span>Sales</span></a>
-            <a href="#" class="nav-link"><i class="fa-solid fa-boxes-stacked"></i><span>Stock</span></a>
-        {% endif %}
-    </nav>
-</aside>
-<div class="overlay" id="overlay"></div>
-{% endif %}
-        <div class="main-container">
-            <header class="navbar">
-                {% if show_sidebar %}
-                    <button class="menu-toggle" id="menuToggle"><i class="fa-solid fa-bars"></i></button>
+        {% if show_sidebar %}
+        <aside class="sidebar" id="sidebar">
+            <div class="sidebar-header">
+                <h2>Stock<span>Flow</span></h2>
+            </div>
+
+            <nav class="sidebar-nav">
+                {% if current_user.role == 'admin' %}
+                    <a href="{{ url_for('admin_dashboard') }}" class="nav-link {% if request.endpoint == 'admin_dashboard' %}active{% endif %}">
+                        <i class="fa-solid fa-house"></i><span>Dashboard</span>
+                    </a>
+                    <a href="{{ url_for('products') }}" class="nav-link">
+                        <i class="fa-solid fa-box"></i><span>Products</span>
+                    </a>
+                    <a href="{{ url_for('categories') }}" class="nav-link">
+                        <i class="fa-solid fa-layer-group"></i><span>Categories</span>
+                    </a>
+                    <a href="{{ url_for('customer') }}" class="nav-link">
+                        <i class="fa-solid fa-users"></i><span>Customers</span>
+                    </a>
+                    <a href="{{ url_for('suppliers') }}" class="nav-link">
+                        <i class="fa-solid fa-truck"></i><span>Suppliers</span>
+                    </a>
+                    <a href="#" class="nav-link">
+                        <i class="fa-solid fa-cart-shopping"></i><span>Sales</span>
+                    </a>
+                    <a href="{{ url_for('stock') }}" class="nav-link">
+                        <i class="fa-solid fa-boxes-stacked"></i><span>Stock</span>
+                    </a>
+                    <a href="#" class="nav-link">
+                        <i class="fa-solid fa-chart-line"></i><span>Reports</span>
+                    </a>
+                    <a href="{{ url_for('staff_list') }}"
+                       class="nav-link {% if request.endpoint in ['staff_list', 'create_staff', 'staff_detail', 'edit_staff'] %}active{% endif %}">
+                        <i class="fa-solid fa-user-plus"></i><span>Staff</span>
+                    </a>
+                {% else %}
+                    <a href="{{ url_for('staff_dashboard') }}" class="nav-link {% if request.endpoint == 'staff_dashboard' %}active{% endif %}">
+                        <i class="fa-solid fa-house"></i><span>Dashboard</span>
+                    </a>
+                    <a href="{{ url_for('products') }}" class="nav-link">
+                        <i class="fa-solid fa-box"></i><span>Products</span>
+                    </a>
+                    <a href="#" class="nav-link">
+                        <i class="fa-solid fa-cart-shopping"></i><span>Sales</span>
+                    </a>
+                    <a href="{{ url_for('stock') }}" class="nav-link">
+                        <i class="fa-solid fa-boxes-stacked"></i><span>Stock</span>
+                    </a>
                 {% endif %}
+            </nav>
+        </aside>
+
+        <div class="overlay" id="overlay"></div>
+        {% endif %}
+
+        <div class="main-container">
+
+            {% if show_sidebar %}
+            <header class="navbar">
+                <button class="menu-toggle" id="menuToggle" type="button" aria-label="Open menu">
+                    <i class="fa-solid fa-bars"></i>
+                </button>
 
                 <div class="navbar-title"><h3>StockFlow</h3></div>
 
-                {% if not show_sidebar %}
-                    <nav class="navbar-links">
-                        <a href="{{ url_for('home') }}">Shop</a>
-                        <a href="#">Cart</a>
-                        <a href="#">My Orders</a>
-                    </nav>
-                {% endif %}
-
                 <div class="navbar-user">
-                    {% if current_user.is_authenticated %}
-                        <i class="fa-solid fa-circle-user"></i>
-                        <span>{{ current_user.full_name }}</span>
-                        {% if current_user.role == 'customer' %}
-                            {% set logout_endpoint = 'customer_logout' %}
-                        {% else %}
-                            {% set logout_endpoint = 'logout' %}
-                        {% endif %}
-                        <a href="{{ url_for(logout_endpoint) }}" class="logout-link">
-                            <i class="fa-solid fa-right-from-bracket"></i>
-                            <span>Logout</span>
-                        </a>
-                    {% else %}
-                        <a href="{{ url_for('customer_login') }}" class="logout-link"><span>Login</span></a>
-                        <a href="{{ url_for('customer_register') }}" class="logout-link"><span>Register</span></a>
-                    {% endif %}
+                    <i class="fa-solid fa-circle-user"></i>
+                    <span>{{ current_user.full_name }}</span>
+                    <a href="{{ url_for(logout_endpoint) }}" class="logout-link">
+                        <i class="fa-solid fa-right-from-bracket"></i>
+                        <span>Logout</span>
+                    </a>
                 </div>
             </header>
+            {% else %}
+            <header class="customer-navbar">
+                <div class="cn-inner">
+
+                    <a href="{{ url_for('home') }}" class="cn-brand">Stock<span>Flow</span></a>
+
+                    <div class="cn-menu" id="cnMenu">
+                        <nav class="cn-links">
+                            <a href="{{ url_for('home') }}"
+                               class="cn-link {% if request.endpoint == 'home' %}active{% endif %}">Home</a>
+                            <a href="{{ url_for('shop') }}"
+                               class="cn-link {% if request.endpoint == 'shop' %}active{% endif %}">Shop</a>
+                            <a href="{{ url_for('my_orders') }}" class="cn-link {% if request.endpoint in ['my_orders', 'order_detail'] %}active{% endif %}">My Orders</a>
+                        </nav>
+
+                        <div class="cn-auth">
+                            {% if current_user.is_authenticated %}
+                                <div class="cn-user">
+                                    <span class="cn-avatar">{{ (current_user.full_name or '?')[:1]|upper }}</span>
+                                    <span class="cn-user-name">{{ current_user.full_name }}</span>
+                                </div>
+                                <a href="{{ url_for(logout_endpoint) }}" class="cn-btn cn-btn-ghost">
+                                    <i class="fa-solid fa-right-from-bracket"></i>
+                                    Logout
+                                </a>
+                            {% else %}
+                                <a href="{{ url_for('customer_login') }}" class="cn-btn cn-btn-ghost">Login</a>
+                                <a href="{{ url_for('customer_register') }}" class="cn-btn cn-btn-primary">Register</a>
+                            {% endif %}
+                        </div>
+                    </div>
+
+                    <a href="{{ url_for('cart') }}"
+                       class="cn-cart {% if request.endpoint == 'cart' %}active{% endif %}"
+                       aria-label="Cart">
+                        <i class="fa-solid fa-cart-shopping"></i>
+                        {% if cart_count.total > 0 %}
+                            <span class="cn-cart-badge">{{ cart_count.total }}</span>
+                        {% endif %}
+                    </a>
+
+                    <button class="cn-toggle" id="cnToggle" type="button" aria-label="Toggle menu" aria-expanded="false">
+                        <i class="fa-solid fa-bars"></i>
+                    </button>
+
+                </div>
+            </header>
+            {% endif %}
 
             <div class="flash-container">
                 {% with messages = get_flashed_messages(with_categories=true) %}
                     {% for category, message in messages %}
                         <div class="flash-message {{ category }}">
                             <span>{{ message }}</span>
-                            <button class="flash-close"><i class="fa-solid fa-xmark"></i></button>
+                            <button class="flash-close" type="button" aria-label="Dismiss">
+                                <i class="fa-solid fa-xmark"></i>
+                            </button>
                         </div>
                     {% endfor %}
                 {% endwith %}
@@ -103,12 +183,14 @@
                 {% if not current_user.is_authenticated %}
                     <p class="footer-links">
                         <a href="{{ url_for('staff_login') }}">Staff Login</a>
-                        <span>·</span>
+                        <span>&middot;</span>
                         <a href="{{ url_for('login') }}">Admin Login</a>
-                    
                     </p>
                 {% endif %}
             </footer>
+
+        </div>
+    </div>
 
     <script>
         const sidebar = document.getElementById('sidebar');
@@ -125,6 +207,22 @@
             overlay.addEventListener('click', () => setSidebar(false));
             document.addEventListener('keydown', event => {
                 if (event.key === 'Escape') setSidebar(false);
+            });
+        }
+
+        const cnToggle = document.getElementById('cnToggle');
+        const cnMenu = document.getElementById('cnMenu');
+
+        function setCustomerMenu(open) {
+            cnMenu.classList.toggle('open', open);
+            cnToggle.setAttribute('aria-expanded', open);
+            cnToggle.querySelector('i').className = open ? 'fa-solid fa-xmark' : 'fa-solid fa-bars';
+        }
+
+        if (cnToggle && cnMenu) {
+            cnToggle.addEventListener('click', () => setCustomerMenu(!cnMenu.classList.contains('open')));
+            document.addEventListener('keydown', event => {
+                if (event.key === 'Escape') setCustomerMenu(false);
             });
         }
 

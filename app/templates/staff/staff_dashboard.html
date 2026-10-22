@@ -1,14 +1,17 @@
+
 {% extends "base.html" %}
 
 {% block title %}Staff Dashboard | StockFlow{% endblock %}
 
 {% block content %}
 <section class="staff-dashboard">
+
     <div class="dashboard-header">
         <div>
             <h1>Staff Dashboard</h1>
             <p>Welcome back, {{ current_user.full_name }}!</p>
         </div>
+
         <div class="staff-badge">
             <i class="fa-solid fa-user-tie"></i>
             Staff Account
@@ -19,6 +22,7 @@
         <div class="welcome-icon">
             <i class="fa-solid fa-handshake"></i>
         </div>
+
         <div>
             <h2>Welcome to StockFlow</h2>
             <p>Manage your daily sales activities and help keep inventory records accurate.</p>
@@ -26,6 +30,7 @@
     </div>
 
     <div class="dashboard-cards">
+
         <div class="dashboard-card">
             <div class="card-icon sales-icon">
                 <i class="fa-solid fa-cart-shopping"></i>
@@ -52,6 +57,64 @@
             <p>Check product stock availability.</p>
             <span>Coming soon</span>
         </div>
+
     </div>
+
+   
+    <section class="low-stock-section">
+
+        <div class="low-stock-header">
+            <h2>
+                <i class="fa-solid fa-triangle-exclamation"></i>
+                Low-Stock Products
+            </h2>
+
+            <span class="low-stock-count">
+                {{ low_stock_products|length }} products
+            </span>
+        </div>
+
+        {% if low_stock_products %}
+            <div class="low-stock-table-wrapper">
+                <table class="low-stock-table">
+                    <thead>
+                        <tr>
+                            <th>Product Name</th>
+                            <th>Quantity Left</th>
+                            <th>Status</th>
+                        </tr>
+                    </thead>
+
+                    <tbody>
+                        {% for product in low_stock_products %}
+                        <tr>
+                            <td>{{ product.name }}</td>
+
+                            <td>{{ product.quantity }}</td>
+
+                            <td>
+                                {% if product.quantity == 0 %}
+                                    <span class="stock-status out">
+                                        Out of Stock
+                                    </span>
+                                {% else %}
+                                    <span class="stock-status low">
+                                        Low Stock
+                                    </span>
+                                {% endif %}
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        {% else %}
+            <p class="no-low-stock">
+                All products have sufficient stock.
+            </p>
+        {% endif %}
+
+    </section>
+
 </section>
 {% endblock %}

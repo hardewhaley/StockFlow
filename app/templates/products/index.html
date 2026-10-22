@@ -71,19 +71,19 @@
                     {% endif %}
 
                     <tr>
-                        <td>{{ loop.index }}</td>
+                        <td data-label="#">{{ loop.index }}</td>
 
-                        <td>
+                        <td data-label="Product">
                             <div class="product-name">
                                 <strong>{{ product.name }}</strong>
                                 <small>{{ product.description or 'No description' }}</small>
                             </div>
                         </td>
 
-                        <td>{{ product.category.name if product.category else 'N/A' }}</td>
-                        <td>{{ product.supplier.full_name if product.supplier else 'N/A' }}</td>
+                        <td data-label="Category">{{ product.category.name if product.category else 'N/A' }}</td>
+                        <td data-label="Supplier">{{ product.supplier.full_name if product.supplier else 'N/A' }}</td>
 
-                        <td>
+                        <td data-label="Purchase Price">
                             {% if product.purchase_price is not none %}
                                 ₦{{ "{:,.2f}".format(product.purchase_price) }}
                             {% else %}
@@ -91,7 +91,7 @@
                             {% endif %}
                         </td>
 
-                        <td>
+                        <td data-label="Selling Price">
                             {% if product.selling_price is not none %}
                                 ₦{{ "{:,.2f}".format(product.selling_price) }}
                             {% else %}
@@ -99,11 +99,11 @@
                             {% endif %}
                         </td>
 
-                        <td>
+                        <td data-label="Quantity">
                             <span class="quantity-badge {{ stock_class }}">{{ product.quantity }}</span>
                         </td>
 
-                        <td>
+                        <td data-label="Actions">
                             <div class="product-actions">
                                 <a href="{{ url_for('edit_product', product_id=product.id) }}"
                                    class="btn-edit"

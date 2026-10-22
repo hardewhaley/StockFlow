@@ -1,0 +1,151 @@
+{% extends "base.html" %}
+
+{% block title %}Order {{ order.order_number }} | StockFlow{% endblock %}
+
+{% block content %}
+{% set step = {'pending': 1, 'confirmed': 2, 'delivered': 3}.get(order.status, 1) %}
+{% set can_cancel = order.status == 'pending' and order.payment_status == 'pending' %}
+
+<section class="orders-page">
+
+    <header class="page-header">
+        <div>
+            <h1>Order {{ order.order_number }}</h1>
+            <p>
+                Placed on
+                {{ order.sale_date.strftime('%d %b %Y, %H:%M') if order.sale_date else 'N/A' }}
+            </p>
+        </div>
+
+        <a href="{{ url_for('my_orders') }}" class="btn-back">
+            <i class="fa-solid fa-arrow-left"></i>
+            Back to My Orders
+        </a>
+    </header>
+
+    {% if order.status == 'cancelled' %}
+    <div class="order-cancelled-banner">
+        <i class="fa-solid fa-circle-xmark"></i>
+        <span>This order was cancelled and the items were returned to stock.</span>
+    </div>
+    {% else %}
+    <ol class="order-timeline">
+        <li class="{% if step >= 1 %}done{% endif %} {% if step == 1 %}current{% endif %}">
+            <span class="step-dot"><i class="fa-solid fa-receipt"></i></span>
+            <strong>Order Placed</strong>
+            <small>{{ order.sale_date.strftime('%d %b %Y') if order.sale_date else '' }}</small>
+        </li>
+        <li class="{% if step >= 2 %}done{% endif %} {% if step == 2 %}current{% endif %}">
+            <span class="step-dot"><i class="fa-solid fa-circle-check"></i></span>
+            <strong>Confirmed</strong>
+            <small>{% if step >= 2 %}Order confirmed{% else %}Waiting{% endif %}</small>
+        </li>
+        <li class="{% if step >= 3 %}done{% endif %} {% if step == 3 %}current{% endif %}">
+            <span class="step-dot"><i class="fa-solid fa-truck-fast"></i></span>
+            <strong>Delivered</strong>
+            <small>{% if step >= 3 %}Order delivered{% else %}Waiting{% endif %}</small>
+        </li>
+    </ol>
+    {% endif %}
+
+    <div class="order-detail-layout">
+
+        <div class="order-detail-main">
+
+            <div class="order-panel">
+                <h2>
+                    <i class="fa-solid fa-box-open"></i>
+                    Items
+                </h2>
+
+                <ul class="detail-items">
+                    {% for item in order.sale_items %}
+                    <li>
+                        <div class="detail-item-icon"><i class="fa-solid fa-box"></i></div>
+                        <div class="detail-item-info">
+                            <strong>{{ item.product.name }}</strong>
+                            <small>₦{{ "{:,.2f}".format(item.unit_price) }} × {{ item.quantity }}</small>
+                        </div>
+                        <span class="detail-item-subtotal">₦{{ "{:,.2f}".format(item.subtotal) }}</span>
+                    </li>
+                    {% endfor %}
+                </ul>
+            </div>
+
+            <div class="order-panel">
+                <h2>
+                    <i class="fa-solid fa-truck-fast"></i>
+                    Delivery Details
+                </h2>
+
+                <div class="info-grid">
+                    <div class="info-item">
+                        <span>Name</span>
+                        <p>{{ order.full_name }}</p>
+                    </div>
+                    <div class="info-item">
+                        <span>Email</span>
+                        <p>{{ order.email }}</p>
+                    </div>
+                    <div class="info-item">
+                        <span>Phone</span>
+                        <p>{{ order.phone }}</p>
+                    </div>
+                    <div class="info-item">
+                        <span>Payment Method</span>
+                        <p>{{ payment_label }}</p>
+                    </div>
+                    <div class="info-item info-wide">
+                        <span>Delivery Address</span>
+                        <p>{{ order.address }}</p>
+                    </div>
+                </div>
+            </div>
+
+        </div>
+
+        <aside class="order-panel order-side">
+            <h2>Order Summary</h2>
+
+            <div class="side-row">
+                <span>Order Status</span>
+                <span class="order-badge s-{{ order.status }}">{{ order.status|capitalize }}</span>
+            </div>
+
+            <div class="side-row">
+                <span>Payment Status</span>
+                <span class="order-badge s-{{ order.payment_status }}">{{ order.payment_status|capitalize }}</span>
+            </div>
+
+            <div class="side-row">
+                <span>Items</span>
+                <strong>{{ order.sale_items|sum(attribute='quantity') }}</strong>
+            </div>
+
+            <div class="side-total">
+                <span>Total</span>
+                <strong>₦{{ "{:,.2f}".format(order.total_amount) }}</strong>
+            </div>
+
+            {% if can_cancel %}
+            <form method="POST"
+                  action="{{ url_for('cancel_order', order_id=order.id) }}"
+                  onsubmit="return confirm('Cancel this order? The items will be returned to stock.');">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <button type="submit" class="btn-cancel-order">
+                    <i class="fa-solid fa-ban"></i>
+                    Cancel Order
+                </button>
+            </form>
+            {% elif order.status in ['pending', 'confirmed'] %}
+            <p class="side-note">
+                <i class="fa-solid fa-circle-info"></i>
+                This order can no longer be cancelled online. Please contact us if you need help.
+            </p>
+            {% endif %}
+        </aside>
+
+    </div>
+
+</section>
+{% endblock %}

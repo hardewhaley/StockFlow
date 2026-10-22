@@ -1,0 +1,157 @@
+{% extends "base.html" %}
+
+{% block title %}Shopping Cart | StockFlow{% endblock %}
+
+{% block content %}
+<section class="shopping-cart-page">
+
+    <header class="cart-header">
+        <div>
+            <span class="cart-eyebrow">YOUR SHOPPING</span>
+            <h1>
+                Shopping Cart
+                {% if cart_items %}
+                    <span class="cart-count-pill">{{ cart_items | sum(attribute='quantity') }} item(s)</span>
+                {% endif %}
+            </h1>
+            <p>Review your products and quantities before checkout.</p>
+        </div>
+
+        <a href="{{ url_for('shop') }}" class="cart-continue-btn">
+            <i class="fa-solid fa-arrow-left"></i>
+            Continue Shopping
+        </a>
+    </header>
+
+    {% if cart_items %}
+    <div class="cart-layout">
+
+        <div class="cart-items">
+            {% for item in cart_items %}
+            <article class="cart-item">
+
+                <div class="cart-item-icon">
+                    <i class="fa-solid fa-box-open"></i>
+                </div>
+
+                <div class="cart-item-body">
+
+                    <div class="cart-item-top">
+                        <div class="cart-item-info">
+                            <h3>{{ item.product.name }}</h3>
+                            <p class="cart-unit-price">₦{{ "{:,.2f}".format(item.price) }} each</p>
+
+                            {% if item.product.quantity <= 5 %}
+                                <span class="stock-badge stock-low">Only {{ item.product.quantity }} left</span>
+                            {% else %}
+                                <span class="stock-badge stock-ok">{{ item.product.quantity }} in stock</span>
+                            {% endif %}
+                        </div>
+
+                        <div class="cart-item-subtotal">
+                            <span>Subtotal</span>
+                            <strong>₦{{ "{:,.2f}".format(item.subtotal) }}</strong>
+                        </div>
+                    </div>
+
+                    <div class="cart-item-bottom">
+
+                        <div class="cart-quantity-controls">
+                            <form action="{{ url_for('update_cart', product_id=item.product.id) }}" method="POST">
+                                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                <input type="hidden" name="action" value="decrease">
+                                <button type="submit" class="quantity-btn"
+                                        {% if item.quantity <= 1 %}disabled{% endif %}
+                                        aria-label="Decrease quantity of {{ item.product.name }}">
+                                    <i class="fa-solid fa-minus"></i>
+                                </button>
+                            </form>
+
+                            <span class="cart-quantity">{{ item.quantity }}</span>
+
+                            <form action="{{ url_for('update_cart', product_id=item.product.id) }}" method="POST">
+                                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                <input type="hidden" name="action" value="increase">
+                                <button type="submit" class="quantity-btn"
+                                        {% if item.quantity >= item.product.quantity %}disabled{% endif %}
+                                        aria-label="Increase quantity of {{ item.product.name }}">
+                                    <i class="fa-solid fa-plus"></i>
+                                </button>
+                            </form>
+                        </div>
+
+                        <form action="{{ url_for('remove_from_cart', product_id=item.product.id) }}"
+                              method="POST"
+                              class="cart-remove-form"
+                              onsubmit="return confirm('Remove this product from your cart?');">
+                            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                            <button type="submit" class="cart-remove-btn">
+                                <i class="fa-solid fa-trash"></i>
+                                Remove
+                            </button>
+                        </form>
+
+                    </div>
+                </div>
+
+            </article>
+            {% endfor %}
+        </div>
+
+        <aside class="cart-summary">
+            <h2>Order Summary</h2>
+
+            <div class="cart-summary-row">
+                <span>Products</span>
+                <span>{{ cart_items | length }}</span>
+            </div>
+
+            <div class="cart-summary-row">
+                <span>Items</span>
+                <span>{{ cart_items | sum(attribute='quantity') }}</span>
+            </div>
+
+            <div class="cart-summary-row">
+                <span>Subtotal</span>
+                <span>₦{{ "{:,.2f}".format(total) }}</span>
+            </div>
+
+            <div class="cart-summary-total">
+                <span>Total</span>
+                <strong>₦{{ "{:,.2f}".format(total) }}</strong>
+            </div>
+
+            <p class="cart-summary-note">
+                <i class="fa-solid fa-circle-info"></i>
+                Your total may change if product prices or stock availability change.
+            </p>
+
+            <a href="{{ url_for('shop') }}" class="cart-shop-btn">
+                <i class="fa-solid fa-store"></i>
+                Continue Shopping
+            </a>
+                <a href="{{ url_for('checkout') }}" class="cart-shop-btn">
+                <i class="fa-solid fa-lock"></i>
+                Proceed to Checkout
+            </a>
+        </aside>
+
+    </div>
+
+    {% else %}
+    <div class="empty-cart">
+        <div class="empty-cart-icon">
+            <i class="fa-solid fa-cart-shopping"></i>
+        </div>
+        <h2>Your cart is empty</h2>
+        <p>Browse our shop and add products to your cart.</p>
+
+        <a href="{{ url_for('shop') }}" class="cart-shop-btn">
+            <i class="fa-solid fa-store"></i>
+            Browse Products
+        </a>
+    </div>
+    {% endif %}
+
+</section>
+{% endblock %}

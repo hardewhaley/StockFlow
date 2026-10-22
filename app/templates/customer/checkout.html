@@ -1,0 +1,135 @@
+{% extends "base.html" %}
+
+{% block title %}Checkout | StockFlow{% endblock %}
+
+{% block content %}
+{% set f = request.form %}
+{% set chosen_payment = f.get('payment_method', '') %}
+
+<section class="checkout-page">
+
+    <header class="page-header">
+        <div>
+            <h1>Checkout</h1>
+            <p>Confirm your details and choose how you would like to pay.</p>
+        </div>
+
+        <a href="{{ url_for('cart') }}" class="btn-back">
+            <i class="fa-solid fa-arrow-left"></i>
+            Back to Cart
+        </a>
+    </header>
+
+    <form method="POST" action="{{ url_for('checkout') }}" class="checkout-layout">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+        <div class="checkout-main">
+
+            <div class="checkout-card">
+                <h2>
+                    <i class="fa-solid fa-truck-fast"></i>
+                    Delivery Details
+                </h2>
+
+                <p class="checkout-description">Where should we send your order?</p>
+
+                <div class="form-grid">
+                    <div class="form-group">
+                        <label for="full_name">Full Name *</label>
+                        <input type="text" id="full_name" name="full_name"
+                               value="{{ f.get('full_name', current_user.full_name or '') }}"
+                               placeholder="Enter your full name"
+                               maxlength="100" autocomplete="name" required>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="email">Email Address *</label>
+                        <input type="email" id="email" name="email"
+                               value="{{ f.get('email', current_user.email or '') }}"
+                               placeholder="you@example.com"
+                               maxlength="120" autocomplete="email" required>
+                    </div>
+
+                    <div class="form-group full-width">
+                        <label for="phone">Phone Number *</label>
+                        <input type="tel" id="phone" name="phone"
+                               value="{{ f.get('phone', current_user.phone or '') }}"
+                               placeholder="Enter your phone number"
+                               maxlength="25" autocomplete="tel" required>
+                    </div>
+
+                    <div class="form-group full-width">
+                        <label for="address">Delivery Address *</label>
+                        <textarea id="address" name="address"
+                                  placeholder="House number, street, city and state"
+                                  maxlength="255" rows="3"
+                                  autocomplete="street-address" required>{{ f.get('address', '') }}</textarea>
+                    </div>
+                </div>
+            </div>
+
+            <div class="checkout-card">
+                <h2>
+                    <i class="fa-solid fa-wallet"></i>
+                    Payment Method
+                </h2>
+
+                <p class="checkout-description">Choose one option.</p>
+
+                <div class="payment-options">
+                    {% for method in payment_methods %}
+                    <label class="pay-option">
+                        <input type="radio" name="payment_method" value="{{ method.value }}"
+                               {% if chosen_payment == method.value %}checked{% endif %} required>
+                        <span class="pay-card">
+                            <span class="pay-icon"><i class="fa-solid {{ method.icon }}"></i></span>
+                            <span class="pay-text">
+                                <strong>{{ method.label }}</strong>
+                                <small>{{ method.description }}</small>
+                            </span>
+                            <span class="pay-check"><i class="fa-solid fa-circle-check"></i></span>
+                        </span>
+                    </label>
+                    {% endfor %}
+                </div>
+            </div>
+
+        </div>
+
+        <aside class="checkout-summary">
+            <h2>Order Summary</h2>
+
+            <ul class="summary-items">
+                {% for item in cart_items %}
+                <li>
+                    <div class="summary-item-info">
+                        <strong>{{ item.product.name }}</strong>
+                        <small>₦{{ "{:,.2f}".format(item.price) }} × {{ item.quantity }}</small>
+                    </div>
+                    <span>₦{{ "{:,.2f}".format(item.subtotal) }}</span>
+                </li>
+                {% endfor %}
+            </ul>
+
+            <div class="summary-row">
+                <span>Items</span>
+                <span>{{ cart_items | sum(attribute='quantity') }}</span>
+            </div>
+
+            <div class="summary-total">
+                <span>Total</span>
+                <strong>₦{{ "{:,.2f}".format(total) }}</strong>
+            </div>
+
+            <button type="submit" class="btn-place-order">
+                <i class="fa-solid fa-lock"></i>
+                Place Order
+            </button>
+
+            <a href="{{ url_for('cart') }}" class="summary-edit-link">Edit cart</a>
+        </aside>
+
+    </form>
+
+</section>
+{% endblock %}

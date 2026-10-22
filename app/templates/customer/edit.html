@@ -1,0 +1,104 @@
+
+{% extends "base.html" %}
+
+{% block title %}Edit Customer | StockFlow{% endblock %}
+
+{% block content %}
+<div class="customer-edit-page">
+
+    <!-- Page Header -->
+    <div class="customer-edit-header">
+        <div>
+            <span class="customer-edit-label">CUSTOMER MANAGEMENT</span>
+            <h1>Edit Customer</h1>
+            <p>Update and manage this customer's information.</p>
+        </div>
+
+        <a href="{{ url_for('customer') }}" class="customer-back-btn">
+            <i class="fa-solid fa-arrow-left"></i>
+            Back to Customers
+        </a>
+    </div>
+
+    <!-- Edit Form Card -->
+    <div class="customer-edit-card">
+
+        <div class="customer-card-heading">
+            <div class="customer-heading-icon">
+                <i class="fa-solid fa-user-pen"></i>
+            </div>
+            <div>
+                <h2>Customer Information</h2>
+                <p>Make the necessary changes below.</p>
+            </div>
+        </div>
+
+        <form method="POST">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+            <div class="customer-edit-form-group">
+                <label for="full_name">Full Name</label>
+                <div class="customer-input-wrapper">
+                    <i class="fa-regular fa-user"></i>
+                    <input
+                        type="text"
+                        id="full_name"
+                        name="full_name"
+                        value="{{ request.form.get('full_name', customer.full_name) }}"
+                        placeholder="Enter customer's full name"
+                        maxlength="100"
+                        required
+                    >
+                </div>
+            </div>
+
+            <div class="customer-edit-form-group">
+                <label for="email">Email Address</label>
+                <div class="customer-input-wrapper">
+                    <i class="fa-regular fa-envelope"></i>
+                    <input
+                        type="email"
+                        id="email"
+                        name="email"
+                        value="{{ request.form.get('email', customer.email) }}"
+                        placeholder="Enter email address"
+                        maxlength="120"
+                        required
+                    >
+                </div>
+            </div>
+
+            <div class="customer-edit-form-group">
+                <label for="phone">Phone Number</label>
+                <div class="customer-input-wrapper">
+                    <i class="fa-solid fa-phone"></i>
+                    <input
+                        type="text"
+                        id="phone"
+                        name="phone"
+                        value="{{ request.form.get('phone', customer.phone) }}"
+                        placeholder="Enter phone number"
+                        maxlength="20"
+                        required
+                    >
+                </div>
+            </div>
+
+            <div class="customer-edit-actions">
+                <button type="submit" class="customer-save-btn">
+                    <i class="fa-solid fa-floppy-disk"></i>
+                    Save Changes
+                </button>
+
+                <a
+                    href="{{ url_for('customer_detail', customer_id=customer.id) }}"
+                    class="customer-cancel-btn"
+                >
+                    Cancel
+                </a>
+            </div>
+        </form>
+    </div>
+
+</div>
+{% endblock %}

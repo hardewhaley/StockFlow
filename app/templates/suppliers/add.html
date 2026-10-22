@@ -6,7 +6,7 @@
 
 {% set f = request.form %}
 
-<section class="product-form-page">
+<section class="supplier-form-page">
 
     <header class="page-header">
         <div>
@@ -20,7 +20,7 @@
         </a>
     </header>
 
-    <div class="product-form-card">
+    <div class="supplier-form-card">
 
         <form method="POST" action="{{ url_for('add_supplier') }}">
 
@@ -44,7 +44,6 @@
 
                     <div class="form-group">
                         <label for="full_name">Supplier Name *</label>
-
                         <input
                             type="text"
                             id="full_name"
@@ -59,7 +58,6 @@
 
                     <div class="form-group">
                         <label for="email">Email Address *</label>
-
                         <input
                             type="email"
                             id="email"
@@ -74,7 +72,6 @@
 
                     <div class="form-group">
                         <label for="phone">Phone Number *</label>
-
                         <input
                             type="tel"
                             id="phone"
@@ -85,7 +82,6 @@
                             autocomplete="tel"
                             required
                         >
-
                         <small>
                             Spaces, hyphens and parentheses will be removed
                             when the number is saved.
@@ -94,7 +90,6 @@
 
                     <div class="form-group full-width">
                         <label for="address">Address *</label>
-
                         <textarea
                             id="address"
                             name="address"
@@ -110,11 +105,7 @@
             </div>
 
             <div class="form-actions">
-
-                <a
-                    href="{{ url_for('suppliers') }}"
-                    class="btn-cancel"
-                >
+                <a href="{{ url_for('suppliers') }}" class="btn-cancel">
                     Cancel
                 </a>
 
@@ -122,7 +113,6 @@
                     <i class="fa-solid fa-floppy-disk"></i>
                     Save Supplier
                 </button>
-
             </div>
 
         </form>

@@ -1,0 +1,79 @@
+{% extends "base.html" %}
+
+{% block title %}Edit Staff | StockFlow{% endblock %}
+
+{% block content %}
+<section class="staff-page">
+
+    <header class="page-header">
+        <div>
+            <h1>Edit Staff</h1>
+            <p>Update this staff member's account information.</p>
+        </div>
+
+        <a href="{{ url_for('staff_detail', staff_id=staff.id) }}" class="btn-back">
+            <i class="fa-solid fa-arrow-left"></i>
+            Back to Details
+        </a>
+    </header>
+
+    <div class="staff-form-card">
+
+        <div class="card-heading">
+            <div class="heading-icon">
+                <i class="fa-solid fa-user-pen"></i>
+            </div>
+            <div>
+                <h2>Staff Information</h2>
+                <p>Update the name and email address below.</p>
+            </div>
+        </div>
+
+        <form method="POST">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+            <div class="form-group">
+                <label for="full_name">Full Name</label>
+                <div class="input-wrapper">
+                    <i class="fa-regular fa-user"></i>
+                    <input
+                        type="text"
+                        id="full_name"
+                        name="full_name"
+                        value="{{ request.form.get('full_name', staff.full_name) }}"
+                        maxlength="100"
+                        placeholder="Enter full name"
+                        required
+                    >
+                </div>
+            </div>
+
+            <div class="form-group">
+                <label for="email">Email Address</label>
+                <div class="input-wrapper">
+                    <i class="fa-regular fa-envelope"></i>
+                    <input
+                        type="email"
+                        id="email"
+                        name="email"
+                        value="{{ request.form.get('email', staff.email) }}"
+                        maxlength="120"
+                        placeholder="Enter email address"
+                        required
+                    >
+                </div>
+            </div>
+
+            <div class="form-actions">
+                <a href="{{ url_for('staff_detail', staff_id=staff.id) }}" class="btn-cancel">Cancel</a>
+
+                <button type="submit" class="btn-save">
+                    <i class="fa-solid fa-floppy-disk"></i>
+                    Save Changes
+                </button>
+            </div>
+        </form>
+    </div>
+
+</section>
+{% endblock %}

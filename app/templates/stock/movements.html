@@ -1,0 +1,94 @@
+{% extends "base.html" %}
+
+{% block title %}Stock Movements | StockFlow{% endblock %}
+
+{% block content %}
+<section class="movements-page">
+
+    <header class="page-header">
+        <div>
+            <h1>Stock Movements</h1>
+            <p>A record of every stock in and stock out.</p>
+        </div>
+
+        <div class="header-stack">
+            <a href="{{ url_for('stock') }}" class="btn-back">
+                <i class="fa-solid fa-boxes-stacked"></i>
+                Stock Levels
+            </a>
+            <a href="{{ url_for('add_stock') }}" class="btn-primary">
+                <i class="fa-solid fa-plus"></i>
+                Record Movement
+            </a>
+        </div>
+    </header>
+
+    <div class="movements-card">
+
+        <div class="table-heading">
+            <h2>All Movements</h2>
+            <span>{{ movements|length }} record(s)</span>
+        </div>
+
+        <div class="table-responsive">
+            <table class="movements-table">
+                <thead>
+                    <tr>
+                        <th>#</th>
+                        <th>Date</th>
+                        <th>Product</th>
+                        <th>Type</th>
+                        <th>Quantity</th>
+                        <th>Reason</th>
+                        <th>Recorded By</th>
+                    </tr>
+                </thead>
+
+                <tbody>
+                    {% for movement in movements %}
+                    <tr>
+                        <td data-label="#">{{ loop.index }}</td>
+
+                        <td data-label="Date" class="movement-date">
+                            {{ movement.movement_date.strftime('%d %b %Y, %H:%M') if movement.movement_date else 'N/A' }}
+                        </td>
+
+                        <td data-label="Product" class="movement-product">
+                            {{ movement.product.name if movement.product else 'Deleted product' }}
+                        </td>
+
+                        <td data-label="Type">
+                            {% if movement.movement_type == 'IN' %}
+                                <span class="movement-badge badge-in">Stock IN</span>
+                            {% else %}
+                                <span class="movement-badge badge-out">Stock OUT</span>
+                            {% endif %}
+                        </td>
+
+                        {% if movement.movement_type == 'IN' %}
+                            <td data-label="Quantity" class="movement-qty qty-in">+{{ movement.quantity }}</td>
+                        {% else %}
+                            <td data-label="Quantity" class="movement-qty qty-out">-{{ movement.quantity }}</td>
+                        {% endif %}
+
+                        <td data-label="Reason" class="movement-reason">{{ movement.reason }}</td>
+
+                       <td data-label="Recorded By" class="movement-user">
+                            {{ movement.user.full_name if movement.user else 'Online order' }}
+                        </td>
+                    </tr>
+                    {% else %}
+                    <tr>
+                        <td colspan="7" class="movements-empty">
+                            <i class="fa-solid fa-boxes-stacked"></i>
+                            <p>No stock movements recorded yet.</p>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+</section>
+{% endblock %}

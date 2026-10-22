@@ -1,0 +1,61 @@
+
+{% extends "base.html" %}
+
+{% block title %}Customer Details | StockFlow{% endblock %}
+
+{% block content %}
+<div class="customers-page">
+
+    <div class="page-header">
+        <div>
+            <h1>Customer Details</h1>
+            <p>View the registered customer's information.</p>
+        </div>
+
+        <a href="{{ url_for('customer') }}" class="btn-primary">
+            <i class="fa-solid fa-arrow-left"></i>
+            Back to Customers
+        </a>
+    </div>
+
+    <div class="product-form-card">
+        <h2>{{ customer.full_name }}</h2>
+
+        <div class="customer-details">
+            <p>
+                <strong>Customer ID:</strong>
+                {{ customer.id }}
+            </p>
+
+            <p>
+                <strong>Full Name:</strong>
+                {{ customer.full_name }}
+            </p>
+
+            <p>
+                <strong>Email:</strong>
+                {{ customer.email }}
+            </p>
+
+            <p>
+                <strong>Phone:</strong>
+                {{ customer.phone }}
+            </p>
+
+            <p>
+                <strong>Date Registered:</strong>
+                {{ customer.created_at.strftime('%d %B %Y') if customer.created_at else 'N/A' }}
+            </p>
+        </div>
+
+        <a
+            href="{{ url_for('customer_edit', customer_id=customer.id) }}"
+            class="btn-primary"
+        >
+            <i class="fa-solid fa-pen-to-square"></i>
+            Edit Customer
+        </a>
+    </div>
+
+</div>
+{% endblock %}

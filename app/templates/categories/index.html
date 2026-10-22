@@ -36,12 +36,12 @@
                     {% set action_text = 'Disable' if category.is_active else 'Enable' %}
 
                     <tr {% if not category.is_active %}class="row-disabled"{% endif %}>
-                        <td>{{ loop.index }}</td>
-                        <td class="category-name">{{ category.name }}</td>
-                        <td>{{ category.description or 'No description' }}</td>
-                        <td>{{ category.products|length }}</td>
+                        <td data-label="#">{{ loop.index }}</td>
+                        <td data-label="Category" class="category-name">{{ category.name }}</td>
+                        <td data-label="Description">{{ category.description or 'No description' }}</td>
+                        <td data-label="Products">{{ category.products|length }}</td>
 
-                        <td>
+                        <td data-label="Status">
                             {% if category.is_active %}
                                 <span class="status-badge status-enabled">Enabled</span>
                             {% else %}
@@ -49,7 +49,7 @@
                             {% endif %}
                         </td>
 
-                        <td>
+                        <td data-label="Actions">
                             <div class="category-actions">
                                 <a href="{{ url_for('edit_category', id=category.id) }}"
                                    class="btn-edit"

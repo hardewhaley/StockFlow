@@ -1,7 +1,5 @@
 {% extends "base.html" %}
-
 {% block title %}Shop - StockFlow{% endblock %}
-
 {% block content %}
 <section class="customer-dashboard">
     <div class="customer-hero">
@@ -15,7 +13,6 @@
             </a>
         </div>
     </div>
-
     <div class="products-section" id="products">
         <div class="section-heading">
             <div>
@@ -24,7 +21,6 @@
             </div>
             <p>Explore the products currently available in our store.</p>
         </div>
-
         <div class="product-grid">
             {% for product in products %}
                 <div class="product-card">
@@ -33,17 +29,23 @@
                     </div>
                     <div class="product-info">
                         <h3>{{ product.name }}</h3>
-                        <p class="product-description">{{ product.description }}</p>
+                        <p class="product-description">{{ product.description or 'No description available.' }}</p>
                         <div class="product-bottom">
-                            <span class="product-price">₦{{ "{:,.2f}".format(product.price) }}</span>
-                            <span class="product-stock">{{ product.quantity }} available</span>
+                            <span class="product-price">₦{{ "{:,.2f}".format(product.selling_price or 0) }}</span>
+                            <span class="product-stock">
+                                {% if product.quantity > 0 %}{{ product.quantity }} available{% else %}Out of stock{% endif %}
+                            </span>
                         </div>
                         <div class="product-actions">
-                            <a href="#" class="product-btn">
-                                <i class="fa-solid fa-cart-shopping"></i>
-                                Add to Cart
-                            </a>
-                            <a href="#" class="view-btn">View</a>
+                            <form action="{{ url_for('add_to_cart', product_id=product.id) }}" method="POST">
+                                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                <input type="hidden" name="quantity" value="1">
+                                <button type="submit" class="product-btn" {% if product.quantity <= 0 %}disabled{% endif %}>
+                                    <i class="fa-solid fa-cart-shopping"></i>
+                                    Add to Cart
+                                </button>
+                            </form>
+                            <a href="{{ url_for('product_detail', product_id=product.id) }}" class="view-btn">View</a>
                         </div>
                     </div>
                 </div>

@@ -1,0 +1,61 @@
+{% extends "base.html" %}
+
+{% block title %}Customers | StockFlow{% endblock %}
+
+{% block content %}
+<div class="customers-page">
+
+    <div class="page-header">
+        <div>
+            <h1>Customers</h1>
+            <p>View and manage registered customers.</p>
+        </div>
+
+        <span class="low-stock-count">
+            {{ customers|length }} customer{{ '' if customers|length == 1 else 's' }}
+        </span>
+    </div>
+
+    {% if customers %}
+    <div class="low-stock-table-wrapper">
+        <table class="low-stock-table">
+            <thead>
+                <tr>
+                    <th>Full Name</th>
+                    <th>Email</th>
+                    <th>Phone</th>
+                    <th>Date Registered</th>
+                    <th>Action</th>
+                </tr>
+            </thead>
+
+            <tbody>
+                {% for customer in customers %}
+                <tr>
+                    <td data-label="Full Name">{{ customer.full_name }}</td>
+                    <td data-label="Email">{{ customer.email }}</td>
+                    <td data-label="Phone">{{ customer.phone }}</td>
+                    <td data-label="Date Registered">
+                        {{ customer.created_at.strftime('%d %b %Y') if customer.created_at else 'N/A' }}
+                    </td>
+                    <td data-label="Action">
+                        <a
+                            href="{{ url_for('customer_detail', customer_id=customer.id) }}"
+                            class="btn-primary"
+                        >
+                            View Details
+                        </a>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% else %}
+        <p class="no-low-stock">
+            No customers have registered yet.
+        </p>
+    {% endif %}
+
+</div>
+{% endblock %}

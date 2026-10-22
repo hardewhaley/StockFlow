@@ -1,0 +1,66 @@
+{% extends "base.html" %}
+
+{% block title %}Order Placed | StockFlow{% endblock %}
+
+{% block content %}
+<section class="checkout-page">
+
+    <div class="success-card">
+        <div class="success-icon"><i class="fa-solid fa-check"></i></div>
+
+        <h1>Thank you for your order!</h1>
+        <p class="success-lead">
+            Your order <strong>{{ order.order_number }}</strong> has been placed
+            {% if order.sale_date %}on {{ order.sale_date.strftime('%d %b %Y, %H:%M') }}{% endif %}.
+        </p>
+
+        <div class="detail-grid">
+            <div class="detail-item">
+                <span>Name</span>
+                <p>{{ order.full_name }}</p>
+            </div>
+            <div class="detail-item">
+                <span>Email</span>
+                <p>{{ order.email }}</p>
+            </div>
+            <div class="detail-item">
+                <span>Phone</span>
+                <p>{{ order.phone }}</p>
+            </div>
+            <div class="detail-item">
+                <span>Payment</span>
+                <p>{{ payment_label }} ({{ order.payment_status|capitalize }})</p>
+            </div>
+            <div class="detail-item detail-wide">
+                <span>Delivery Address</span>
+                <p>{{ order.address }}</p>
+            </div>
+        </div>
+
+        <ul class="summary-items success-items">
+            {% for item in order.sale_items %}
+            <li>
+                <div class="summary-item-info">
+                    <strong>{{ item.product.name }}</strong>
+                    <small>₦{{ "{:,.2f}".format(item.unit_price) }} × {{ item.quantity }}</small>
+                </div>
+                <span>₦{{ "{:,.2f}".format(item.subtotal) }}</span>
+            </li>
+            {% endfor %}
+        </ul>
+
+        <div class="summary-total">
+            <span>Total</span>
+            <strong>₦{{ "{:,.2f}".format(order.total_amount) }}</strong>
+        </div>
+
+        <div class="success-actions">
+            <a href="{{ url_for('my_orders') }}" class="btn-place-order">
+                <i class="fa-solid fa-receipt"></i>
+                View My Orders
+            </a>
+        </div>
+    </div>
+
+</section>
+{% endblock %}

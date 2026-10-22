@@ -1,0 +1,97 @@
+{% extends "base.html" %}
+
+{% block title %}Record Stock | StockFlow{% endblock %}
+
+{% block content %}
+{% set f = request.form %}
+{% set chosen_product = f.get('product_id', request.args.get('product_id', '')) %}
+{% set chosen_type = f.get('movement_type', 'IN') %}
+
+<section class="stock-form-page">
+
+    <header class="page-header">
+        <div>
+            <h1>Record Stock Movement</h1>
+            <p>Add stock that came in, or remove stock that went out.</p>
+        </div>
+
+        <div class="header-stack">
+            <!-- <a href="{{ url_for('stock') }}" class="btn-back">
+                <i class="fa-solid fa-arrow-left"></i>
+                Back to Stock
+            </a> -->
+            <a href="{{ url_for('stock_movements') }}" class="btn-primary">
+                <i class="fa-solid fa-clock-rotate-left"></i>
+                Stock Movements
+            </a>
+        </div>
+    </header>
+
+    <div class="stock-form-card">
+        <form method="POST" action="{{ url_for('add_stock') }}">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+            <div class="form-section">
+                <h2>
+                    <i class="fa-solid fa-boxes-stacked"></i>
+                    Movement Details
+                </h2>
+
+                <p class="form-description">
+                    Choose a product, the type of movement and the quantity.
+                </p>
+
+                <div class="form-grid">
+                    <div class="form-group">
+                        <label for="product_id">Product *</label>
+                        <select id="product_id" name="product_id" required>
+                            <option value="" disabled {% if not chosen_product %}selected{% endif %}>
+                                Select product
+                            </option>
+                            {% for product in products %}
+                            <option value="{{ product.id }}"
+                                {% if chosen_product == product.id|string %}selected{% endif %}>
+                                {{ product.name }} (Available: {{ product.quantity }})
+                            </option>
+                            {% endfor %}
+                        </select>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="movement_type">Movement Type *</label>
+                        <select id="movement_type" name="movement_type" required>
+                            <option value="IN" {% if chosen_type == 'IN' %}selected{% endif %}>Stock IN (add stock)</option>
+                            <option value="OUT" {% if chosen_type == 'OUT' %}selected{% endif %}>Stock OUT (remove stock)</option>
+                        </select>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="quantity">Quantity *</label>
+                        <input type="number" id="quantity" name="quantity"
+                               min="1" step="1" inputmode="numeric"
+                               value="{{ f.get('quantity', '') }}" required>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="reason">Reason *</label>
+                        <input type="text" id="reason" name="reason"
+                               value="{{ f.get('reason', '') }}"
+                               maxlength="255"
+                               placeholder="e.g. New delivery, damaged goods" required>
+                    </div>
+                </div>
+            </div>
+
+            <div class="form-actions">
+                <a href="{{ url_for('stock') }}" class="btn-cancel">Cancel</a>
+
+                <button type="submit" class="btn-save-product">
+                    <i class="fa-solid fa-floppy-disk"></i>
+                    Save Movement
+                </button>
+            </div>
+        </form>
+    </div>
+
+</section>
+{% endblock %}

@@ -1,0 +1,103 @@
+{% extends "base.html" %}
+
+{% block title %}My Orders | StockFlow{% endblock %}
+
+{% block content %}
+<section class="orders-page">
+
+    <header class="page-header">
+        <div>
+            <h1>My Orders</h1>
+            <p>Track your purchases and view past orders.</p>
+        </div>
+
+        <a href="{{ url_for('shop') }}" class="btn-back">
+            <i class="fa-solid fa-store"></i>
+            Continue Shopping
+        </a>
+    </header>
+
+    {% if counts['all'] > 0 %}
+    <nav class="order-tabs" aria-label="Filter orders">
+        {% for key, label in tabs %}
+        <a href="{{ url_for('my_orders', status=key) }}"
+           class="order-tab {% if current_status == key %}active{% endif %}">
+            {{ label }}
+            <span>{{ counts[key] }}</span>
+        </a>
+        {% endfor %}
+    </nav>
+    {% endif %}
+
+    {% if orders %}
+    <div class="order-list">
+        {% for order in orders %}
+        <article class="order-card">
+
+            <div class="order-card-top">
+                <div>
+                    <h2>{{ order.order_number }}</h2>
+                    <p class="order-date">
+                        {{ order.sale_date.strftime('%d %b %Y, %H:%M') if order.sale_date else 'N/A' }}
+                    </p>
+                </div>
+                <span class="order-badge s-{{ order.status }}">{{ order.status|capitalize }}</span>
+            </div>
+
+            <div class="order-card-meta">
+                <div>
+                    <span class="meta-label">Items</span>
+                    <strong>{{ order.sale_items|sum(attribute='quantity') }}</strong>
+                </div>
+                <div>
+                    <span class="meta-label">Payment</span>
+                    <strong>{{ payment_labels.get(order.payment_method, order.payment_method) }}</strong>
+                </div>
+                <div>
+                    <span class="meta-label">Payment Status</span>
+                    <span class="order-badge s-{{ order.payment_status }}">{{ order.payment_status|capitalize }}</span>
+                </div>
+                <div>
+                    <span class="meta-label">Total</span>
+                    <strong class="order-total">₦{{ "{:,.2f}".format(order.total_amount) }}</strong>
+                </div>
+            </div>
+
+            <div class="order-card-bottom">
+                <p class="order-preview">
+                    {{ order.sale_items|map(attribute='product.name')|join(', ')|truncate(80) }}
+                </p>
+
+                <a href="{{ url_for('order_detail', order_id=order.id) }}" class="btn-view-order">
+                    View Details
+                    <i class="fa-solid fa-arrow-right"></i>
+                </a>
+            </div>
+
+        </article>
+        {% endfor %}
+    </div>
+
+    {% else %}
+    <div class="orders-empty">
+        <div class="orders-empty-icon">
+            <i class="fa-solid fa-receipt"></i>
+        </div>
+
+        {% if counts['all'] == 0 %}
+            <h2>No orders yet</h2>
+            <p>When you place an order, it will show up here.</p>
+            <a href="{{ url_for('shop') }}" class="btn-primary-lg">
+                <i class="fa-solid fa-store"></i>
+                Start Shopping
+            </a>
+        {% else %}
+            <h2>No {{ current_status }} orders</h2>
+            <p>You have no orders with this status.</p>
+            <a href="{{ url_for('my_orders') }}" class="btn-primary-lg">View All Orders</a>
+        {% endif %}
+    </div>
+    {% endif %}
+
+</section>
+{% endblock %}
