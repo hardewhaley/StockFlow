@@ -1,0 +1,112 @@
+{% extends "base.html" %}
+
+{% block title %}Sales | StockFlow{% endblock %}
+
+{% block content %}
+<section class="sales-page">
+
+    <header class="page-header">
+        <div>
+            <h1>Sales</h1>
+            <p>Record in-store sales and review every order.</p>
+        </div>
+
+        <a href="{{ url_for('new_sale') }}" class="btn-primary">
+            <i class="fa-solid fa-plus"></i>
+            New Sale
+        </a>
+    </header>
+
+    <div class="sales-summary">
+        <div class="summary-card">
+            <div class="summary-icon"><i class="fa-solid fa-receipt"></i></div>
+            <div>
+                <p>Total Sales</p>
+                <h3>{{ sales|length }}</h3>
+            </div>
+        </div>
+
+        <div class="summary-card">
+            <div class="summary-icon"><i class="fa-solid fa-naira-sign"></i></div>
+            <div>
+                <p>Revenue</p>
+                <h3>₦{{ "{:,.2f}".format(revenue) }}</h3>
+            </div>
+        </div>
+
+        <div class="summary-card">
+            <div class="summary-icon"><i class="fa-solid fa-clock"></i></div>
+            <div>
+                <p>Pending Online Orders</p>
+                <h3>{{ pending_online }}</h3>
+            </div>
+        </div>
+    </div>
+
+    <div class="sales-card">
+        <div class="table-heading">
+            <h2>All Sales</h2>
+            <span>{{ sales|length }} record(s)</span>
+        </div>
+
+        <div class="table-responsive">
+            <table class="sales-table">
+                <thead>
+                    <tr>
+                        <th>Reference</th>
+                        <th>Date</th>
+                        <th>Customer</th>
+                        <th>Source</th>
+                        <th>Items</th>
+                        <th>Total</th>
+                        <th>Payment</th>
+                        <th>Status</th>
+                        <th>Action</th>
+                    </tr>
+                </thead>
+
+                <tbody>
+                    {% for sale in sales %}
+                    <tr>
+                        <td data-label="Reference" class="sale-ref">
+                            {{ sale.order_number or 'SAL-%05d'|format(sale.id) }}
+                        </td>
+                        <td data-label="Date" class="sale-date">{{ sale.sale_date|local_time }}</td>
+                        <td data-label="Customer">
+                            {{ sale.full_name or (sale.customer.full_name if sale.customer else 'Walk-in customer') }}
+                        </td>
+                        <td data-label="Source">
+                            <span class="source-tag {% if sale.user_id %}src-store{% else %}src-online{% endif %}">
+                                {{ 'In-store' if sale.user_id else 'Online' }}
+                            </span>
+                        </td>
+                        <td data-label="Items">{{ sale.sale_items|sum(attribute='quantity') }}</td>
+                        <td data-label="Total" class="sale-amount">₦{{ "{:,.2f}".format(sale.total_amount) }}</td>
+                        <td data-label="Payment">
+                            <span class="sale-badge sb-{{ sale.payment_status }}">{{ sale.payment_status|capitalize }}</span>
+                        </td>
+                        <td data-label="Status">
+                            <span class="sale-badge sb-{{ sale.status }}">{{ sale.status|capitalize }}</span>
+                        </td>
+                        <td data-label="Action">
+                            <a href="{{ url_for('sale_detail', sale_id=sale.id) }}" class="btn-view">
+                                <i class="fa-solid fa-eye"></i>
+                                View
+                            </a>
+                        </td>
+                    </tr>
+                    {% else %}
+                    <tr>
+                        <td colspan="9" class="sales-empty">
+                            <i class="fa-solid fa-receipt"></i>
+                            <p>No sales yet. Click "New Sale" to record your first one.</p>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+</section>
+{% endblock %}

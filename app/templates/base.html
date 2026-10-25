@@ -19,6 +19,10 @@
     <link rel="stylesheet" href="{{ url_for('static', filename='css/supplier.css') }}">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/checkout.css') }}">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/orders.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/sales.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/home.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/customer_dashboard.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/reports.css') }}">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.7.2/css/all.min.css">
 </head>
 <body>
@@ -60,13 +64,13 @@
                     <a href="{{ url_for('suppliers') }}" class="nav-link">
                         <i class="fa-solid fa-truck"></i><span>Suppliers</span>
                     </a>
-                    <a href="#" class="nav-link">
+                    <a href="{{ url_for('sales') }}" class="nav-link">
                         <i class="fa-solid fa-cart-shopping"></i><span>Sales</span>
                     </a>
                     <a href="{{ url_for('stock') }}" class="nav-link">
                         <i class="fa-solid fa-boxes-stacked"></i><span>Stock</span>
                     </a>
-                    <a href="#" class="nav-link">
+                    <a href="{{ url_for('reports') }}" class="nav-link">
                         <i class="fa-solid fa-chart-line"></i><span>Reports</span>
                     </a>
                     <a href="{{ url_for('staff_list') }}"
@@ -80,7 +84,7 @@
                     <a href="{{ url_for('products') }}" class="nav-link">
                         <i class="fa-solid fa-box"></i><span>Products</span>
                     </a>
-                    <a href="#" class="nav-link">
+                    <a href="{{ url_for('sales') }}" class="nav-link">
                         <i class="fa-solid fa-cart-shopping"></i><span>Sales</span>
                     </a>
                     <a href="{{ url_for('stock') }}" class="nav-link">
@@ -124,6 +128,10 @@
                                class="cn-link {% if request.endpoint == 'home' %}active{% endif %}">Home</a>
                             <a href="{{ url_for('shop') }}"
                                class="cn-link {% if request.endpoint == 'shop' %}active{% endif %}">Shop</a>
+                            {% if current_user.is_authenticated %}
+                            <a href="{{ url_for('customer_dashboard') }}"
+                               class="cn-link {% if request.endpoint == 'customer_dashboard' %}active{% endif %}">Dashboard</a>
+                            {% endif %}
                             <a href="{{ url_for('my_orders') }}" class="cn-link {% if request.endpoint in ['my_orders', 'order_detail'] %}active{% endif %}">My Orders</a>
                         </nav>
 
@@ -180,7 +188,15 @@
 
             <footer class="footer">
                 <p>&copy; 2026 StockFlow. All rights reserved.</p>
-                {% if not current_user.is_authenticated %}
+                {% if current_user.is_authenticated and current_user.role == 'customer' %}
+                    <p class="footer-links">
+                        <a href="{{ url_for('shop') }}">Shop</a>
+                        <span>&middot;</span>
+                        <a href="{{ url_for('cart') }}">Cart</a>
+                        <span>&middot;</span>
+                        <a href="{{ url_for('my_orders') }}">My Orders</a>
+                    </p>
+                {% elif not current_user.is_authenticated %}
                     <p class="footer-links">
                         <a href="{{ url_for('staff_login') }}">Staff Login</a>
                         <span>&middot;</span>

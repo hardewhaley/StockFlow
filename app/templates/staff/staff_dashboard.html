@@ -1,4 +1,3 @@
-
 {% extends "base.html" %}
 
 {% block title %}Staff Dashboard | StockFlow{% endblock %}
@@ -6,114 +5,333 @@
 {% block content %}
 <section class="staff-dashboard">
 
-    <div class="dashboard-header">
+    <header class="staff-dashboard-header">
         <div>
+            <span class="staff-dashboard-label">STAFF WORKSPACE</span>
             <h1>Staff Dashboard</h1>
-            <p>Welcome back, {{ current_user.full_name }}!</p>
+            <p>Welcome back, {{ current_user.full_name }}! Here's your daily overview.</p>
         </div>
 
-        <div class="staff-badge">
-            <i class="fa-solid fa-user-tie"></i>
-            Staff Account
-        </div>
-    </div>
+        <div class="staff-header-badges">
+            {% if pending_orders %}
+            <a href="{{ url_for('sales') }}" class="staff-pending-badge">
+                <i class="fa-solid fa-clock"></i>
+                <span>{{ pending_orders }} Pending Order{{ '' if pending_orders == 1 else 's' }}</span>
+            </a>
+            {% endif %}
 
-    <div class="welcome-card">
-        <div class="welcome-icon">
-            <i class="fa-solid fa-handshake"></i>
+            <div class="staff-account-badge">
+                <i class="fa-solid fa-user-tie"></i>
+                <span>Staff Account</span>
+            </div>
+        </div>
+    </header>
+
+    <div class="staff-welcome-card">
+        <div class="staff-welcome-icon">
+            <i class="fa-solid fa-chart-line"></i>
         </div>
 
-        <div>
+        <div class="staff-welcome-text">
             <h2>Welcome to StockFlow</h2>
-            <p>Manage your daily sales activities and help keep inventory records accurate.</p>
+            <p>Monitor inventory, record sales and keep stock records accurate.</p>
         </div>
+
+        <a href="{{ url_for('new_sale') }}" class="staff-welcome-btn">
+            <i class="fa-solid fa-plus"></i>
+            New Sale
+        </a>
     </div>
 
-    <div class="dashboard-cards">
+    <div class="staff-stats-grid">
 
-        <div class="dashboard-card">
-            <div class="card-icon sales-icon">
-                <i class="fa-solid fa-cart-shopping"></i>
+        <div class="staff-stat-card">
+            <div class="staff-stat-top">
+                <div class="staff-stat-icon products"><i class="fa-solid fa-box"></i></div>
+                <span class="staff-stat-label">Total Products</span>
             </div>
-            <h3>Sales</h3>
-            <p>Record and manage customer sales.</p>
-            <span>Coming soon</span>
+            <h3>{{ total_products }}</h3>
+            <p>Registered products</p>
+            <a href="{{ url_for('products') }}" class="staff-stat-link">
+                View products <i class="fa-solid fa-arrow-right"></i>
+            </a>
         </div>
 
-        <div class="dashboard-card">
-            <div class="card-icon product-icon">
-                <i class="fa-solid fa-box"></i>
+        <div class="staff-stat-card">
+            <div class="staff-stat-top">
+                <div class="staff-stat-icon inventory"><i class="fa-solid fa-boxes-stacked"></i></div>
+                <span class="staff-stat-label">Available Stock</span>
             </div>
-            <h3>Products</h3>
-            <p>View available products and their prices.</p>
-            <span>Coming soon</span>
+            <h3>{{ available_stock }}</h3>
+            <p>Units in inventory</p>
+            <a href="{{ url_for('stock') }}" class="staff-stat-link">
+                Manage stock <i class="fa-solid fa-arrow-right"></i>
+            </a>
         </div>
 
-        <div class="dashboard-card">
-            <div class="card-icon stock-icon">
-                <i class="fa-solid fa-boxes-stacked"></i>
+        <div class="staff-stat-card">
+            <div class="staff-stat-top">
+                <div class="staff-stat-icon sales"><i class="fa-solid fa-cart-shopping"></i></div>
+                <span class="staff-stat-label">Today's Sales</span>
             </div>
-            <h3>Inventory</h3>
-            <p>Check product stock availability.</p>
-            <span>Coming soon</span>
+            <h3>{{ today_sales }}</h3>
+            <p>
+                {% if today_sales %}₦{{ "{:,.2f}".format(today_revenue) }} today{% else %}No sales yet today{% endif %}
+            </p>
+            <a href="{{ url_for('sales') }}" class="staff-stat-link">
+                View sales <i class="fa-solid fa-arrow-right"></i>
+            </a>
+        </div>
+
+        <div class="staff-stat-card">
+            <div class="staff-stat-top">
+                <div class="staff-stat-icon customers"><i class="fa-solid fa-users"></i></div>
+                <span class="staff-stat-label">Total Customers</span>
+            </div>
+            <h3>{{ total_customers }}</h3>
+            <p>Registered customers</p>
+            <a href="{{ url_for('customer') }}" class="staff-stat-link">
+                View customers <i class="fa-solid fa-arrow-right"></i>
+            </a>
+        </div>
+
+        <div class="staff-stat-card staff-stat-warn">
+            <div class="staff-stat-top">
+                <div class="staff-stat-icon low-stock"><i class="fa-solid fa-triangle-exclamation"></i></div>
+                <span class="staff-stat-label">Low Stock</span>
+            </div>
+            <h3>{{ low_stock_count }}</h3>
+            <p>Products needing attention</p>
+            <a href="#staff-low-stock" class="staff-stat-link">
+                Check products <i class="fa-solid fa-arrow-right"></i>
+            </a>
         </div>
 
     </div>
 
-   
-    <section class="low-stock-section">
+    <section class="staff-dashboard-section">
+        <div class="staff-section-heading">
+            <div>
+                <h2>Quick Actions</h2>
+                <p>Jump straight into your daily tasks.</p>
+            </div>
+        </div>
 
-        <div class="low-stock-header">
-            <h2>
-                <i class="fa-solid fa-triangle-exclamation"></i>
-                Low-Stock Products
-            </h2>
+        <div class="staff-quick-actions">
 
-            <span class="low-stock-count">
-                {{ low_stock_products|length }} products
+            <a href="{{ url_for('new_sale') }}" class="staff-action-card staff-action-primary">
+                <span class="staff-action-icon"><i class="fa-solid fa-cash-register"></i></span>
+                <span class="staff-action-text">
+                    <strong>New Sale</strong>
+                    <small>Record an in-store sale</small>
+                </span>
+                <i class="fa-solid fa-chevron-right staff-action-arrow"></i>
+            </a>
+
+            <a href="{{ url_for('add_stock') }}" class="staff-action-card">
+                <span class="staff-action-icon"><i class="fa-solid fa-warehouse"></i></span>
+                <span class="staff-action-text">
+                    <strong>Record Stock</strong>
+                    <small>Add or remove stock</small>
+                </span>
+                <i class="fa-solid fa-chevron-right staff-action-arrow"></i>
+            </a>
+
+            <a href="{{ url_for('sales') }}" class="staff-action-card">
+                <span class="staff-action-icon"><i class="fa-solid fa-receipt"></i></span>
+                <span class="staff-action-text">
+                    <strong>View Sales</strong>
+                    <small>Review sales and online orders</small>
+                </span>
+                <i class="fa-solid fa-chevron-right staff-action-arrow"></i>
+            </a>
+
+            <a href="{{ url_for('products') }}" class="staff-action-card">
+                <span class="staff-action-icon"><i class="fa-solid fa-box-open"></i></span>
+                <span class="staff-action-text">
+                    <strong>View Products</strong>
+                    <small>Check details and prices</small>
+                </span>
+                <i class="fa-solid fa-chevron-right staff-action-arrow"></i>
+            </a>
+
+            <a href="{{ url_for('stock_movements') }}" class="staff-action-card">
+                <span class="staff-action-icon"><i class="fa-solid fa-clock-rotate-left"></i></span>
+                <span class="staff-action-text">
+                    <strong>Stock Movements</strong>
+                    <small>See every stock in and out</small>
+                </span>
+                <i class="fa-solid fa-chevron-right staff-action-arrow"></i>
+            </a>
+
+            <a href="{{ url_for('customer') }}" class="staff-action-card">
+                <span class="staff-action-icon"><i class="fa-solid fa-user-group"></i></span>
+                <span class="staff-action-text">
+                    <strong>Customers</strong>
+                    <small>View customer information</small>
+                </span>
+                <i class="fa-solid fa-chevron-right staff-action-arrow"></i>
+            </a>
+
+        </div>
+    </section>
+
+    <section class="staff-dashboard-section">
+        <div class="staff-section-heading">
+            <div>
+                <h2>Recent Sales</h2>
+                <p>Your latest recorded sales and online orders.</p>
+            </div>
+
+            <a href="{{ url_for('sales') }}" class="staff-view-all">
+                View all <i class="fa-solid fa-arrow-right"></i>
+            </a>
+        </div>
+
+        {% if recent_sales %}
+        <div class="staff-table-wrapper">
+            <table class="staff-dashboard-table">
+                <thead>
+                    <tr>
+                        <th>Order / Sale</th>
+                        <th>Customer</th>
+                        <th>Date</th>
+                        <th>Amount</th>
+                        <th>Status</th>
+                        <th>Action</th>
+                    </tr>
+                </thead>
+
+                <tbody>
+                    {% for sale in recent_sales %}
+                    <tr>
+                        <td data-label="Order / Sale">
+                            <span class="staff-sale-reference">
+                                {{ sale.order_number or ('SAL-%05d'|format(sale.id)) }}
+                            </span>
+                            {% if (sale.order_number or '').startswith('ORD-') %}
+                                <span class="staff-tag-online">Online</span>
+                            {% endif %}
+                        </td>
+
+                        <td data-label="Customer">
+                            {{ sale.full_name or (sale.customer.full_name if sale.customer else 'Walk-in customer') }}
+                        </td>
+
+                        <td data-label="Date" class="staff-sale-date">
+                            {{ sale.sale_date|local_time('%d %b %Y, %I:%M %p') }}
+                        </td>
+
+                        <td data-label="Amount" class="staff-sale-amount">
+                            ₦{{ "{:,.2f}".format(sale.total_amount or 0) }}
+                        </td>
+
+                        <td data-label="Status">
+                            {% if sale.status == 'cancelled' %}
+                                <span class="staff-status cancelled">Cancelled</span>
+                            {% elif sale.status in ['delivered', 'completed'] %}
+                                <span class="staff-status completed">{{ sale.status|capitalize }}</span>
+                            {% elif sale.status == 'confirmed' %}
+                                <span class="staff-status confirmed">Confirmed</span>
+                            {% else %}
+                                <span class="staff-status pending">{{ (sale.status or 'pending')|capitalize }}</span>
+                            {% endif %}
+                        </td>
+
+                        <td data-label="Action">
+                            <a href="{{ url_for('sale_detail', sale_id=sale.id) }}" class="staff-btn-small">
+                                <i class="fa-solid fa-eye"></i> View
+                            </a>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}
+        <div class="staff-empty-state">
+            <i class="fa-solid fa-receipt"></i>
+            <h3>No sales yet</h3>
+            <p>Recent sales will appear here once they have been recorded.</p>
+        </div>
+        {% endif %}
+    </section>
+
+    <section class="staff-dashboard-section" id="staff-low-stock">
+        <div class="staff-section-heading">
+            <div>
+                <h2>
+                    <i class="fa-solid fa-triangle-exclamation staff-heading-warning"></i>
+                    Low-Stock Products
+                </h2>
+                <p>Products with five or fewer units remaining.</p>
+            </div>
+
+            <span class="staff-low-stock-count">
+                {{ low_stock_count }} product{{ '' if low_stock_count == 1 else 's' }}
             </span>
         </div>
 
         {% if low_stock_products %}
-            <div class="low-stock-table-wrapper">
-                <table class="low-stock-table">
-                    <thead>
-                        <tr>
-                            <th>Product Name</th>
-                            <th>Quantity Left</th>
-                            <th>Status</th>
-                        </tr>
-                    </thead>
+        <div class="staff-table-wrapper">
+            <table class="staff-dashboard-table">
+                <thead>
+                    <tr>
+                        <th>Product Name</th>
+                        <th>Quantity Left</th>
+                        <th>Status</th>
+                        <th>Action</th>
+                    </tr>
+                </thead>
 
-                    <tbody>
-                        {% for product in low_stock_products %}
-                        <tr>
-                            <td>{{ product.name }}</td>
+                <tbody>
+                    {% for product in low_stock_products %}
+                    <tr>
+                        <td data-label="Product">
+                            <div class="staff-product-name">
+                                <span class="staff-product-icon"><i class="fa-solid fa-box"></i></span>
+                                <strong>{{ product.name }}</strong>
+                            </div>
+                        </td>
 
-                            <td>{{ product.quantity }}</td>
+                        <td data-label="Quantity Left">
+                            <strong>{{ product.quantity }}</strong>
+                            <span class="staff-units-label">units</span>
+                        </td>
 
-                            <td>
-                                {% if product.quantity == 0 %}
-                                    <span class="stock-status out">
-                                        Out of Stock
-                                    </span>
-                                {% else %}
-                                    <span class="stock-status low">
-                                        Low Stock
-                                    </span>
-                                {% endif %}
-                            </td>
-                        </tr>
-                        {% endfor %}
-                    </tbody>
-                </table>
-            </div>
-        {% else %}
-            <p class="no-low-stock">
-                All products have sufficient stock.
-            </p>
+                        <td data-label="Status">
+                            {% if product.quantity == 0 %}
+                                <span class="staff-status out-of-stock">
+                                    <i class="fa-solid fa-circle-xmark"></i> Out of Stock
+                                </span>
+                            {% else %}
+                                <span class="staff-status low">
+                                    <i class="fa-solid fa-triangle-exclamation"></i> Low Stock
+                                </span>
+                            {% endif %}
+                        </td>
+
+                        <td data-label="Action">
+                            <a href="{{ url_for('add_stock', product_id=product.id) }}" class="staff-btn-small">
+                                <i class="fa-solid fa-plus"></i> Restock
+                            </a>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+
+        {% if low_stock_count > low_stock_products|length %}
+        <p class="staff-more">Showing {{ low_stock_products|length }} of {{ low_stock_count }} low-stock products.</p>
         {% endif %}
-
+        {% else %}
+        <div class="staff-empty-state staff-empty-good">
+            <i class="fa-solid fa-circle-check"></i>
+            <h3>Inventory looks good!</h3>
+            <p>All products currently have sufficient stock.</p>
+        </div>
+        {% endif %}
     </section>
 
 </section>

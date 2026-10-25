@@ -2,6 +2,7 @@ import re
 import secrets
 import string
 import time
+from datetime import datetime, timedelta, timezone
 from decimal import Decimal, InvalidOperation
 
 from flask import render_template, redirect, flash, url_for, session, request, abort
@@ -17,11 +18,71 @@ from app.forms import LoginForm, StaffForm, CustomerRegistrationForm, CustomerOT
 from app.models import User, Customer, Product, Supplier, Category, StockMovement, Sale, SaleItem
 
 
+LAGOS = timezone(timedelta(hours=1))
+
 OTP_LIFETIME_SECONDS = 600
 OTP_MAX_ATTEMPTS = 5
 MAX_PRICE = Decimal('99999999.99')
 REASON_MAX_LENGTH = 255
 EMAIL_PATTERN = re.compile(r'^[^@\s]+@[^@\s]+\.[^@\s]+$')
+
+LOW_STOCK_LEVEL = 5
+
+PAYMENT_METHODS = [
+    {
+        'value': 'pay_on_delivery',
+        'label': 'Pay on Delivery',
+        'description': 'Pay in cash when your order arrives.',
+        'icon': 'fa-money-bill-wave'
+    },
+    {
+        'value': 'bank_transfer',
+        'label': 'Bank Transfer',
+        'description': 'Transfer the total to our account after ordering.',
+        'icon': 'fa-building-columns'
+    },
+    {
+        'value': 'card',
+        'label': 'Card Payment',
+        'description': 'Pay with your debit or credit card.',
+        'icon': 'fa-credit-card'
+    }
+]
+
+PAYMENT_LABELS = {method['value']: method['label'] for method in PAYMENT_METHODS}
+
+STAFF_PAYMENT_METHODS = [
+    {'value': 'cash', 'label': 'Cash', 'icon': 'fa-money-bill-wave'},
+    {'value': 'bank_transfer', 'label': 'Bank Transfer', 'icon': 'fa-building-columns'},
+    {'value': 'card', 'label': 'Card Payment', 'icon': 'fa-credit-card'}
+]
+
+STAFF_PAYMENT_VALUES = {method['value'] for method in STAFF_PAYMENT_METHODS}
+
+SALE_PAYMENT_LABELS = {**PAYMENT_LABELS, 'cash': 'Cash'}
+
+ORDER_TABS = [
+    ('all', 'All'),
+    ('pending', 'Pending'),
+    ('confirmed', 'Confirmed'),
+    ('delivered', 'Delivered'),
+    ('cancelled', 'Cancelled'),
+]
+
+ORDER_STATUSES = [key for key, label in ORDER_TABS if key != 'all']
+
+
+class SaleError(Exception):
+    pass
+
+
+@app.template_filter('local_time')
+def local_time(value, fmt='%d %b %Y, %H:%M'):
+    if value is None:
+        return 'N/A'
+    if value.tzinfo is None:
+        value = value.replace(tzinfo=timezone.utc)
+    return value.astimezone(LAGOS).strftime(fmt)
 
 
 def has_role(*roles):
@@ -78,30 +139,9 @@ def generate_staff_code(length=6):
     characters = string.ascii_uppercase + string.digits
     return "STF-" + ''.join(secrets.choice(characters) for _ in range(length))
 
-EMAIL_PATTERN = re.compile(r'^[^@\s]+@[^@\s]+\.[^@\s]+$')
 
-PAYMENT_METHODS = [
-    {
-        'value': 'pay_on_delivery',
-        'label': 'Pay on Delivery',
-        'description': 'Pay in cash when your order arrives.',
-        'icon': 'fa-money-bill-wave'
-    },
-    {
-        'value': 'bank_transfer',
-        'label': 'Bank Transfer',
-        'description': 'Transfer the total to our account after ordering.',
-        'icon': 'fa-building-columns'
-    },
-    {
-        'value': 'card',
-        'label': 'Card Payment',
-        'description': 'Pay with your debit or credit card.',
-        'icon': 'fa-credit-card'
-    }
-]
-
-PAYMENT_LABELS = {method['value']: method['label'] for method in PAYMENT_METHODS}
+def clean_phone(value):
+    return re.sub(r'[\s\-()]', '', value)
 
 
 def get_cart_items():
@@ -149,15 +189,6 @@ def get_cart_items():
 
     session['cart'] = cleaned_cart
     return cart_items, total, adjusted
-ORDER_TABS = [
-    ('all', 'All'),
-    ('pending', 'Pending'),
-    ('confirmed', 'Confirmed'),
-    ('delivered', 'Delivered'),
-    ('cancelled', 'Cancelled'),
-]
-
-ORDER_STATUSES = [key for key, label in ORDER_TABS if key != 'all']
 
 
 def get_customer_order(order_id):
@@ -165,7 +196,7 @@ def get_customer_order(order_id):
 
     if (
         sale is None
-        or sale.order_number is None
+        or not (sale.order_number or '').startswith('ORD-')
         or sale.customer_id != current_user.id
     ):
         abort(404)
@@ -173,18 +204,170 @@ def get_customer_order(order_id):
     return sale
 
 
+def sale_form_products():
+    product_list = (
+        Product.query
+        .filter(Product.quantity > 0, Product.selling_price.isnot(None))
+        .order_by(Product.name.asc())
+        .all()
+    )
+    return [
+        {
+            'id': product.id,
+            'name': product.name,
+            'price': float(product.selling_price),
+            'stock': product.quantity
+        }
+        for product in product_list
+    ]
 
-# customer
+def sales_totals(*conditions):
+    count, amount = (
+        db.session.query(
+            func.count(Sale.id),
+            func.coalesce(func.sum(Sale.total_amount), 0)
+        )
+        .filter(Sale.status != 'cancelled', *conditions)
+        .one()
+    )
+    return count, Decimal(str(amount))
+
+
+def as_utc(value):
+    if value is None:
+        return datetime.min.replace(tzinfo=timezone.utc)
+    if value.tzinfo is None:
+        return value.replace(tzinfo=timezone.utc)
+    return value
+
+
+def build_activities(limit=8):
+    activities = []
+
+    recent_sale_rows = (
+        Sale.query
+        .options(joinedload(Sale.user))
+        .order_by(Sale.sale_date.desc(), Sale.id.desc())
+        .limit(limit)
+        .all()
+    )
+
+    for sale in recent_sale_rows:
+        reference = sale.order_number or f"SAL-{sale.id:05d}"
+        online = (sale.order_number or '').startswith('ORD-')
+
+        if online:
+            title = f"Online order {reference} placed"
+            detail = f"{sale.full_name or 'Customer'} · ₦{sale.total_amount:,.2f}"
+            icon, tone = 'fa-globe', 'purple'
+        else:
+            seller = sale.user.full_name if sale.user else 'Staff'
+            title = f"Sale {reference} recorded"
+            detail = f"{seller} · ₦{sale.total_amount:,.2f}"
+            icon, tone = 'fa-receipt', 'blue'
+
+        activities.append({
+            'icon': icon,
+            'tone': tone,
+            'title': title,
+            'detail': detail,
+            'when': sale.sale_date,
+            'url': url_for('sale_detail', sale_id=sale.id)
+        })
+
+    manual_movements = (
+        StockMovement.query
+        .options(joinedload(StockMovement.product), joinedload(StockMovement.user))
+        .filter(
+            ~StockMovement.reason.like('Sale %'),
+            ~StockMovement.reason.like('Online order %'),
+            ~StockMovement.reason.like('Cancelled order %')
+        )
+        .order_by(StockMovement.movement_date.desc(), StockMovement.id.desc())
+        .limit(limit)
+        .all()
+    )
+
+    for movement in manual_movements:
+        incoming = movement.movement_type == 'IN'
+        product_name = movement.product.name if movement.product else 'Deleted product'
+        person = movement.user.full_name if movement.user else 'System'
+
+        activities.append({
+            'icon': 'fa-arrow-down' if incoming else 'fa-arrow-up',
+            'tone': 'green' if incoming else 'amber',
+            'title': f"Stock {'IN' if incoming else 'OUT'}: {product_name}",
+            'detail': f"{'+' if incoming else '-'}{movement.quantity} · {movement.reason} · {person}",
+            'when': movement.movement_date,
+            'url': url_for('stock_movements')
+        })
+
+    activities.sort(key=lambda activity: as_utc(activity['when']), reverse=True)
+    return activities[:limit]
+
+REPORT_PERIODS = [
+    ('today', 'Today'),
+    ('7d', 'Last 7 Days'),
+    ('30d', 'Last 30 Days'),
+    ('month', 'This Month'),
+    ('all', 'All Time'),
+]
+
+REPORT_SOURCES = [
+    ('all', 'All Sales'),
+    ('store', 'In-store'),
+    ('online', 'Online'),
+]
+
+REPORT_PERIOD_KEYS = {key for key, label in REPORT_PERIODS}
+REPORT_SOURCE_KEYS = {key for key, label in REPORT_SOURCES}
+
+
+def to_local_date(value):
+    if value.tzinfo is None:
+        value = value.replace(tzinfo=timezone.utc)
+    return value.astimezone(LAGOS).date()
+
+
+def local_day_start_utc(day):
+    start = datetime(day.year, day.month, day.day, tzinfo=LAGOS)
+    return start.astimezone(timezone.utc).replace(tzinfo=None)
+
+
+def parse_report_date(value):
+    try:
+        return datetime.strptime(value, '%Y-%m-%d').date()
+    except (ValueError, TypeError):
+        return None
+
 @app.route('/')
 def home():
-    products = Product.query.all()
-    return render_template('customer/dashboard.html', products=products)
+    products = (
+        Product.query
+        .options(joinedload(Product.category))
+        .order_by(Product.name.asc())
+        .all()
+    )
+
+    newest_ids = []
+    if len(products) > 4:
+        newest_ids = [
+            product.id
+            for product in sorted(products, key=lambda item: item.id, reverse=True)[:4]
+        ]
+
+    return render_template(
+        'customer/dashboard.html',
+        products=products,
+        newest_ids=newest_ids
+    )
 
 
 @app.route('/shop')
 def shop():
     products = Product.query.order_by(Product.name.asc()).all()
     return render_template('customer/shop.html', products=products)
+
 
 @app.route('/product/<int:product_id>')
 def product_detail(product_id):
@@ -193,13 +376,16 @@ def product_detail(product_id):
     if product is None:
         flash("Product not found.", "error")
         return redirect(url_for('shop'))
+
     return render_template('customer/product_detail.html', product=product)
+
 
 @app.route('/cart/add/<int:product_id>', methods=['POST'])
 def add_to_cart(product_id):
     if not has_role('customer'):
         flash("Please log in with a customer account to shop.", "error")
         return redirect(url_for('shop'))
+
     product = db.session.get(Product, product_id)
 
     if product is None:
@@ -219,24 +405,21 @@ def add_to_cart(product_id):
         flash("Please enter a valid quantity.", "error")
         return redirect(url_for('product_detail', product_id=product.id))
 
-    cart = session.get('cart', {})
+    saved_cart = session.get('cart', {})
     product_key = str(product.id)
-    current_quantity = cart.get(product_key, 0)
+    current_quantity = saved_cart.get(product_key, 0)
 
     if current_quantity + quantity > product.quantity:
-        flash(
-            f"Only {product.quantity} unit(s) are currently available.",
-            "error"
-        )
+        flash(f"Only {product.quantity} unit(s) are currently available.", "error")
         return redirect(url_for('product_detail', product_id=product.id))
 
-    cart[product_key] = current_quantity + quantity
-    session['cart'] = cart
+    saved_cart[product_key] = current_quantity + quantity
+    session['cart'] = saved_cart
 
     flash(f"{product.name} added to your cart!", "success")
     return redirect(url_for('cart'))
 
-# view shopping cart
+
 @app.route('/cart')
 @login_required
 def cart():
@@ -250,6 +433,75 @@ def cart():
         flash("Some items in your cart were updated or removed because of stock changes.", "error")
 
     return render_template('customer/cart.html', cart_items=cart_items, total=total)
+
+
+@app.route('/cart/update/<int:product_id>', methods=['POST'])
+@login_required
+def update_cart(product_id):
+    if not has_role('customer'):
+        flash("Please log in with a customer account.", "error")
+        return redirect(url_for('shop'))
+
+    product = db.session.get(Product, product_id)
+    saved_cart = session.get('cart', {})
+    key = str(product_id)
+
+    if key not in saved_cart:
+        flash("Product not found in your cart.", "error")
+        return redirect(url_for('cart'))
+
+    if product is None:
+        saved_cart.pop(key, None)
+        session['cart'] = saved_cart
+        flash("That product is no longer available and was removed.", "error")
+        return redirect(url_for('cart'))
+
+    try:
+        quantity = int(saved_cart[key])
+    except (ValueError, TypeError):
+        saved_cart.pop(key, None)
+        session['cart'] = saved_cart
+        flash("Invalid cart quantity.", "error")
+        return redirect(url_for('cart'))
+
+    action = request.form.get('action')
+
+    if action == 'increase':
+        if quantity < product.quantity:
+            saved_cart[key] = quantity + 1
+        else:
+            flash("You have reached the available stock limit.", "error")
+
+    elif action == 'decrease':
+        if quantity > 1:
+            saved_cart[key] = quantity - 1
+        else:
+            flash("Remove the product if you no longer want it.", "error")
+
+    else:
+        flash("Invalid action.", "error")
+
+    session['cart'] = saved_cart
+    return redirect(url_for('cart'))
+
+
+@app.route('/cart/remove/<int:product_id>', methods=['POST'])
+@login_required
+def remove_from_cart(product_id):
+    if not has_role('customer'):
+        flash("Please log in with a customer account.", "error")
+        return redirect(url_for('shop'))
+
+    saved_cart = session.get('cart', {})
+
+    if saved_cart.pop(str(product_id), None) is None:
+        flash("Product was not in your cart.", "error")
+    else:
+        flash("Product removed from your cart.", "success")
+
+    session['cart'] = saved_cart
+    return redirect(url_for('cart'))
+
 
 @app.route('/checkout', methods=['GET', 'POST'])
 @login_required
@@ -296,15 +548,6 @@ def checkout():
 
         if not errors:
             try:
-                product_ids = [item['product'].id for item in cart_items]
-                locked_products = {
-                    product.id: product
-                    for product in Product.query
-                    .filter(Product.id.in_(product_ids))
-                    .with_for_update()
-                    .all()
-                }
-
                 sale = Sale(
                     customer_id=current_user.id,
                     user_id=None,
@@ -325,16 +568,23 @@ def checkout():
 
                 for item in cart_items:
                     quantity = item['quantity']
-                    product = locked_products.get(item['product'].id)
+                    product = db.session.get(Product, item['product'].id)
 
-                    if (
-                        product is None
-                        or product.selling_price is None
-                        or quantity > product.quantity
-                    ):
+                    if product is None or product.selling_price is None:
+                        db.session.rollback()
+                        flash(f"Sorry, {item['product'].name} is no longer available.", "error")
+                        return redirect(url_for('cart'))
+
+                    result = db.session.execute(
+                        update(Product)
+                        .where(Product.id == product.id, Product.quantity >= quantity)
+                        .values(quantity=Product.quantity - quantity)
+                    )
+
+                    if result.rowcount == 0:
                         db.session.rollback()
                         flash(
-                            f"Sorry, {item['product'].name} is no longer available in the quantity you selected.",
+                            f"Sorry, {product.name} is no longer available in the quantity you selected.",
                             "error"
                         )
                         return redirect(url_for('cart'))
@@ -350,8 +600,6 @@ def checkout():
                         unit_price=unit_price,
                         subtotal=subtotal
                     ))
-
-                    product.quantity -= quantity
 
                     db.session.add(StockMovement(
                         product_id=product.id,
@@ -373,7 +621,13 @@ def checkout():
                 app.logger.exception("Checkout failed")
                 flash("Something went wrong while placing your order. Please try again.", "error")
 
-    return render_template('customer/checkout.html', cart_items=cart_items,total=total,payment_methods=PAYMENT_METHODS)
+    return render_template(
+        'customer/checkout.html',
+        cart_items=cart_items,
+        total=total,
+        payment_methods=PAYMENT_METHODS
+    )
+
 
 @app.route('/order/<int:order_id>/success')
 @login_required
@@ -383,7 +637,12 @@ def order_success(order_id):
 
     sale = get_customer_order(order_id)
 
-    return render_template('customer/order_success.html', order=sale,payment_label=PAYMENT_LABELS.get(sale.payment_method, sale.payment_method))
+    return render_template(
+        'customer/order_success.html',
+        order=sale,
+        payment_label=PAYMENT_LABELS.get(sale.payment_method, sale.payment_method)
+    )
+
 
 @app.route('/orders')
 @login_required
@@ -395,7 +654,7 @@ def my_orders():
     all_orders = (
         Sale.query
         .options(selectinload(Sale.sale_items).selectinload(SaleItem.product))
-        .filter(Sale.customer_id == current_user.id, Sale.order_number.isnot(None))
+        .filter(Sale.customer_id == current_user.id, Sale.order_number.like('ORD-%'))
         .order_by(Sale.sale_date.desc(), Sale.id.desc())
         .all()
     )
@@ -432,7 +691,11 @@ def order_detail(order_id):
 
     order = get_customer_order(order_id)
 
-    return render_template('customer/order_detail.html', order=order,payment_label=PAYMENT_LABELS.get(order.payment_method, order.payment_method))
+    return render_template(
+        'customer/order_detail.html',
+        order=order,
+        payment_label=PAYMENT_LABELS.get(order.payment_method, order.payment_method)
+    )
 
 
 @app.route('/orders/<int:order_id>/cancel', methods=['POST'])
@@ -488,155 +751,84 @@ def cancel_order(order_id):
 
     return redirect(url_for('order_detail', order_id=order.id))
 
-@app.route('/cart/update/<int:product_id>', methods=['POST'])
-@login_required
-def update_cart(product_id):
-    if not has_role('customer'):
-        flash("Please log in with a customer account.", "error")
-        return redirect(url_for('shop'))
 
-    product = db.session.get(Product, product_id)
-    saved_cart = session.get('cart', {})
-    key = str(product_id)
-
-    if product is None or key not in saved_cart:
-        flash("Product not found in your cart.", "error")
-        return redirect(url_for('cart'))
-
-    try:
-        quantity = int(saved_cart[key])
-    except (ValueError, TypeError):
-        saved_cart.pop(key, None)
-        session['cart'] = saved_cart
-        flash("Invalid cart quantity.", "error")
-        return redirect(url_for('cart'))
-
-    action = request.form.get('action')
-
-    if action == 'increase':
-        if quantity < product.quantity:
-            saved_cart[key] = quantity + 1
-            flash("Cart quantity increased.", "success")
-        else:
-            flash("You have reached the available stock limit.", "error")
-
-    elif action == 'decrease':
-        if quantity > 1:
-            saved_cart[key] = quantity - 1
-            flash("Cart quantity decreased.", "success")
-        else:
-            flash("Remove the product if you no longer want it.", "error")
-
-    session['cart'] = saved_cart
-    return redirect(url_for('cart'))
-
-
-@app.route('/cart/remove/<int:product_id>', methods=['POST'])
-@login_required
-def remove_from_cart(product_id):
-    if not has_role('customer'):
-        flash("Please log in with a customer account.", "error")
-        return redirect(url_for('shop'))
-
-    saved_cart = session.get('cart', {})
-    saved_cart.pop(str(product_id), None)
-    session['cart'] = saved_cart
-
-    flash("Product removed from your cart.", "success")
-    return redirect(url_for('cart'))
-
-
-# view all customers
 @app.route('/customers')
 @login_required
 def customer():
     if not has_role('admin', 'staff'):
         flash("You're not authorized to view customers.", "error")
         return redirect(dashboard_for(current_user))
-    customer_list = Customer.query.order_by(
-        Customer.full_name.asc()
-    ).all()
-    return render_template(
-        'customer/index.html',
-        customers=customer_list
-    )
-# view customer details
+
+    customer_list = Customer.query.order_by(Customer.full_name.asc()).all()
+    return render_template('customer/index.html', customers=customer_list)
+
+
 @app.route('/customers/<int:customer_id>')
 @login_required
 def customer_detail(customer_id):
     if not has_role('admin', 'staff'):
-        flash(
-            "You are not authorized to view customer details.",
-            "error"
-        )
+        flash("You are not authorized to view customer details.", "error")
         return redirect(dashboard_for(current_user))
+
     customer = db.session.get(Customer, customer_id)
+
     if customer is None:
         flash("Customer not found.", "error")
         return redirect(url_for('customer'))
-    return render_template(
-        'customer/detail.html',
-        customer=customer
-    )
-# edit customer details
+
+    return render_template('customer/detail.html', customer=customer)
+
+
 @app.route('/customers/<int:customer_id>/edit', methods=['GET', 'POST'])
 @login_required
 def customer_edit(customer_id):
     if not has_role('admin', 'staff'):
-        flash(
-            "You are not authorized to edit customers.",
-            "error"
-        )
+        flash("You are not authorized to edit customers.", "error")
         return redirect(dashboard_for(current_user))
+
     customer = db.session.get(Customer, customer_id)
+
     if customer is None:
         flash("Customer not found.", "error")
         return redirect(url_for('customer'))
+
     if request.method == 'POST':
         full_name = request.form.get('full_name', '').strip()
         email = request.form.get('email', '').strip().lower()
         phone = request.form.get('phone', '').strip()
         errors = []
- 
+
         if not full_name:
             errors.append("Full name is required.")
         elif len(full_name) > 100:
-            errors.append(
-                "Full name must not exceed 100 characters."
-            )
-     
+            errors.append("Full name must not exceed 100 characters.")
+
         if not email:
             errors.append("Email is required.")
         elif len(email) > 120 or not EMAIL_PATTERN.match(email):
             errors.append("Enter a valid email address.")
-        # Validate phone number
+
         if not phone:
             errors.append("Phone number is required.")
         elif len(phone) > 20:
-            errors.append(
-                "Phone number must not exceed 20 characters."
-            )
-        
+            errors.append("Phone number must not exceed 20 characters.")
+
         if email:
             existing_email = Customer.query.filter(
                 func.lower(Customer.email) == email,
                 Customer.id != customer.id
             ).first()
             if existing_email:
-                errors.append(
-                    "That email address is already in use."
-                )
-     
+                errors.append("That email address is already in use.")
+
         if phone:
             existing_phone = Customer.query.filter(
                 Customer.phone == phone,
                 Customer.id != customer.id
             ).first()
             if existing_phone:
-                errors.append(
-                    "That phone number is already in use."
-                )
-     
+                errors.append("That phone number is already in use.")
+
         if errors:
             for error in errors:
                 flash(error, "error")
@@ -644,44 +836,86 @@ def customer_edit(customer_id):
             customer.full_name = full_name
             customer.email = email
             customer.phone = phone
+
             try:
                 db.session.commit()
-                flash(
-                    "Customer details updated successfully.",
-                    "success"
-                )
-                return redirect(
-                    url_for(
-                        'customer_detail',
-                        customer_id=customer.id
-                    )
-                )
+                flash("Customer details updated successfully.", "success")
+                return redirect(url_for('customer_detail', customer_id=customer.id))
             except IntegrityError:
                 db.session.rollback()
-                flash(
-                    "That email or phone number is already in use.",
-                    "error"
-                )
+                flash("That email or phone number is already in use.", "error")
             except Exception:
                 db.session.rollback()
-                app.logger.exception(
-                    "Failed to update customer"
-                )
-                flash(
-                    "Unable to update customer details. "
-                    "Please try again.",
-                    "error"
-                )
-    return render_template(
-        'customer/edit.html',
-        customer=customer
-    )
+                app.logger.exception("Failed to update customer")
+                flash("Unable to update customer details. Please try again.", "error")
+
+    return render_template('customer/edit.html', customer=customer)
+
+
 @app.route('/customer/dashboard')
+@login_required
 def customer_dashboard():
-    products = Product.query.all()
+    if not has_role('customer'):
+        flash("Please log in with a customer account to view your dashboard.", "error")
+        return redirect(dashboard_for(current_user))
+
+    order_filter = (
+        Sale.customer_id == current_user.id,
+        Sale.order_number.like('ORD-%')
+    )
+
+    status_counts = dict(
+        db.session.query(Sale.status, func.count(Sale.id))
+        .filter(*order_filter)
+        .group_by(Sale.status)
+        .all()
+    )
+
+    cart_items, cart_total, adjusted = get_cart_items()
+
+    recent_orders = (
+        Sale.query
+        .options(selectinload(Sale.sale_items).selectinload(SaleItem.product))
+        .filter(*order_filter)
+        .order_by(Sale.sale_date.desc(), Sale.id.desc())
+        .limit(5)
+        .all()
+    )
+
+    active_order = next(
+        (order for order in recent_orders if order.status in ('pending', 'confirmed')),
+        None
+    )
+
+    featured_products = (
+        Product.query
+        .filter(Product.quantity > 0, Product.selling_price.isnot(None))
+        .order_by(Product.id.desc())
+        .limit(4)
+        .all()
+    )
+
+    hour = datetime.now(LAGOS).hour
+    if hour < 12:
+        greeting = 'Good morning'
+    elif hour < 17:
+        greeting = 'Good afternoon'
+    else:
+        greeting = 'Good evening'
+
+    name_parts = (current_user.full_name or '').split()
+
     return render_template(
-        'customer/dashboard.html',
-        products=products
+        'customer/account.html',
+        greeting=greeting,
+        first_name=name_parts[0] if name_parts else 'there',
+        total_orders=sum(status_counts.values()),
+        pending_orders=status_counts.get('pending', 0),
+        completed_orders=status_counts.get('delivered', 0),
+        cart_count=sum(item['quantity'] for item in cart_items),
+        recent_orders=recent_orders,
+        active_order=active_order,
+        featured_products=featured_products
     )
 
 
@@ -691,6 +925,7 @@ def customer_register():
         return redirect(dashboard_for(current_user))
 
     form = CustomerRegistrationForm()
+
     if form.validate_on_submit():
         full_name = form.full_name.data.strip()
         email = form.email.data.strip().lower()
@@ -757,8 +992,10 @@ def verify_customer_otp():
         return redirect(url_for('customer_register'))
 
     form = CustomerOTPForm()
+
     if form.validate_on_submit():
         attempts = registration_data.get('attempts', 0)
+
         if attempts >= OTP_MAX_ATTEMPTS:
             session.pop('customer_registration', None)
             flash("Too many incorrect attempts. Please register again.", "error")
@@ -773,6 +1010,7 @@ def verify_customer_otp():
                 phone=registration_data['phone'],
                 password=registration_data['password']
             )
+
             try:
                 db.session.add(customer)
                 db.session.commit()
@@ -799,15 +1037,18 @@ def customer_login():
         return redirect(dashboard_for(current_user))
 
     form = LoginForm()
+
     if form.validate_on_submit():
         email = form.email.data.strip().lower()
         password = form.password.data
 
         customer = Customer.query.filter_by(email=email).first()
+
         if customer and check_password_hash(customer.password, password):
             login_user(customer)
             flash("Welcome to StockFlow!", "success")
             return redirect(url_for('home'))
+
         flash("Invalid email or password.", "error")
 
     return render_template('customer/login.html', form=form)
@@ -821,18 +1062,19 @@ def customer_logout():
     return redirect(url_for('customer_login'))
 
 
-# admin login
 @app.route('/login', methods=['GET', 'POST'])
 def login():
     if current_user.is_authenticated:
         return redirect(dashboard_for(current_user))
 
     form = LoginForm()
+
     if form.validate_on_submit():
         email = form.email.data.strip().lower()
         password = form.password.data
 
         user = User.query.filter_by(email=email).first()
+
         if user and check_password_hash(user.password, password):
             if user.role != 'admin':
                 flash("You are not authorized to access the admin area", "error")
@@ -841,12 +1083,12 @@ def login():
             login_user(user)
             flash("Welcome to StockFlow, Admin!", "success")
             return redirect(url_for('admin_dashboard'))
+
         flash("Invalid email or password.", "error")
 
     return render_template('login.html', form=form)
 
 
-# staff login
 @app.route('/staff/login', methods=['GET', 'POST'])
 def staff_login():
     if current_user.is_authenticated:
@@ -858,7 +1100,11 @@ def staff_login():
         email = form.email.data.strip().lower()
         user = User.query.filter_by(email=email).first()
 
-        if user and user.role == 'staff' and check_password_hash(user.password, form.staff_code.data.strip()):
+        if (
+            user
+            and user.role == 'staff'
+            and check_password_hash(user.password, form.staff_code.data.strip())
+        ):
             login_user(user)
             flash("Welcome to StockFlow!", "success")
             return redirect(url_for('staff_dashboard'))
@@ -868,17 +1114,63 @@ def staff_login():
     return render_template('staff_login.html', form=form)
 
 
-# dashboards
+
 @app.route('/staff/dashboard')
 @login_required
 def staff_dashboard():
     if not has_role('staff'):
         flash("You are not authorized to access the staff dashboard.", "error")
         return redirect(dashboard_for(current_user))
-    low_stock_products = Product.query.filter(
-    Product.quantity <= 5
-).order_by(Product.quantity.asc()).all()
-    return render_template('staff/staff_dashboard.html', low_stock_products=low_stock_products)
+
+    start_local = datetime.now(LAGOS).replace(hour=0, minute=0, second=0, microsecond=0)
+    start_utc = start_local.astimezone(timezone.utc).replace(tzinfo=None)
+    end_utc = start_utc + timedelta(days=1)
+
+    total_products = Product.query.count()
+    available_stock = db.session.query(func.coalesce(func.sum(Product.quantity), 0)).scalar()
+
+    today_sales, today_revenue = sales_totals(
+        Sale.sale_date >= start_utc,
+        Sale.sale_date < end_utc
+    )
+
+    total_customers = Customer.query.count()
+
+    low_stock_query = Product.query.filter(Product.quantity <= LOW_STOCK_LEVEL)
+    low_stock_count = low_stock_query.count()
+    low_stock_products = (
+        low_stock_query
+        .order_by(Product.quantity.asc(), Product.name.asc())
+        .limit(8)
+        .all()
+    )
+
+    recent_sales = (
+        Sale.query
+        .options(joinedload(Sale.customer), joinedload(Sale.user))
+        .order_by(Sale.sale_date.desc(), Sale.id.desc())
+        .limit(6)
+        .all()
+    )
+
+    pending_orders = Sale.query.filter(
+        Sale.order_number.like('ORD-%'),
+        Sale.status == 'pending'
+    ).count()
+
+    return render_template(
+        'staff/staff_dashboard.html',
+        total_products=total_products,
+        available_stock=available_stock,
+        today_sales=today_sales,
+        today_revenue=today_revenue,
+        total_customers=total_customers,
+        low_stock_count=low_stock_count,
+        low_stock_products=low_stock_products,
+        recent_sales=recent_sales,
+        pending_orders=pending_orders
+    )
+
 
 
 @app.route('/admin_dashboard')
@@ -887,12 +1179,56 @@ def admin_dashboard():
     if not has_role('admin'):
         flash("You are not authorized to access the admin area", "error")
         return redirect(dashboard_for(current_user))
-    low_stock_products = Product.query.filter(
-    Product.quantity <= 5
-).order_by(Product.quantity.asc()).all()
-    low_stock_count = len(low_stock_products)
-    return render_template('admin/dashboard.html', low_stock_products=low_stock_products, low_stock_count=low_stock_count)
 
+    start_local = datetime.now(LAGOS).replace(hour=0, minute=0, second=0, microsecond=0)
+    start_utc = start_local.astimezone(timezone.utc).replace(tzinfo=None)
+    end_utc = start_utc + timedelta(days=1)
+
+    total_sales, total_revenue = sales_totals()
+    today_sales, today_revenue = sales_totals(
+        Sale.sale_date >= start_utc,
+        Sale.sale_date < end_utc
+    )
+
+    low_stock_query = Product.query.filter(Product.quantity <= LOW_STOCK_LEVEL)
+    low_stock_count = low_stock_query.count()
+    low_stock_products = (
+        low_stock_query
+        .order_by(Product.quantity.asc(), Product.name.asc())
+        .limit(8)
+        .all()
+    )
+
+    recent_sales = (
+        Sale.query
+        .options(joinedload(Sale.customer), joinedload(Sale.user))
+        .order_by(Sale.sale_date.desc(), Sale.id.desc())
+        .limit(6)
+        .all()
+    )
+
+    return render_template(
+        'admin/dashboard.html',
+        total_products=Product.query.count(),
+        total_units=db.session.query(func.coalesce(func.sum(Product.quantity), 0)).scalar(),
+        total_customers=Customer.query.count(),
+        total_staff=User.query.filter_by(role='staff').count(),
+        total_suppliers=Supplier.query.count(),
+        active_suppliers=Supplier.query.filter(Supplier.is_active.is_(True)).count(),
+        total_sales=total_sales,
+        total_revenue=total_revenue,
+        today_sales=today_sales,
+        today_revenue=today_revenue,
+        low_stock_count=low_stock_count,
+        out_of_stock_count=Product.query.filter(Product.quantity == 0).count(),
+        pending_orders=Sale.query.filter(
+            Sale.order_number.like('ORD-%'),
+            Sale.status == 'pending'
+        ).count(),
+        recent_sales=recent_sales,
+        low_stock_products=low_stock_products,
+        activities=build_activities()
+    )
 
 
 @app.route('/admin/stock-alerts')
@@ -901,14 +1237,16 @@ def admin_stock_alerts():
     if not has_role('admin'):
         flash("You are not authorized to access stock alerts.", "error")
         return redirect(dashboard_for(current_user))
-    low_stock_products = Product.query.filter(
-        Product.quantity <= 5
-    ).order_by(Product.quantity.asc()).all()
 
+    low_stock_products = (
+        Product.query
+        .filter(Product.quantity <= 5)
+        .order_by(Product.quantity.asc())
+        .all()
+    )
     return render_template('admin/stock_alerts.html', low_stock_products=low_stock_products)
 
 
-# staff management
 @app.route('/admin/staff/create', methods=['GET', 'POST'])
 @login_required
 def create_staff():
@@ -976,52 +1314,57 @@ StockFlow Team
 
     return render_template('admin/create_staff.html', form=form)
 
-# view all staff
+
 @app.route('/admin/staff')
 @login_required
 def staff_list():
     if not has_role('admin'):
         flash("You are not authorized to view staff members.", "error")
         return redirect(dashboard_for(current_user))
-    staff_members = (User.query.filter_by(role='staff').order_by(User.full_name.asc()).all())
+
+    staff_members = User.query.filter_by(role='staff').order_by(User.full_name.asc()).all()
     return render_template('admin/staff/index.html', staff_members=staff_members)
 
-# view staff details
+
 @app.route('/admin/staff/<int:staff_id>')
 @login_required
 def staff_detail(staff_id):
     if not has_role('admin'):
         flash("You are not authorized to view staff details.", "error")
         return redirect(dashboard_for(current_user))
+
     staff = User.query.filter_by(id=staff_id, role='staff').first()
+
     if staff is None:
         flash("Staff member not found.", "error")
         return redirect(url_for('staff_list'))
+
     return render_template('admin/staff/detail.html', staff=staff)
 
 
-# edit staff details
 @app.route('/admin/staff/<int:staff_id>/edit', methods=['GET', 'POST'])
 @login_required
 def edit_staff(staff_id):
     if not has_role('admin'):
         flash("You are not authorized to edit staff details.", "error")
         return redirect(dashboard_for(current_user))
-    staff = User.query.filter_by(
-        id=staff_id,
-        role='staff'
-    ).first()
+
+    staff = User.query.filter_by(id=staff_id, role='staff').first()
+
     if staff is None:
         flash("Staff member not found.", "error")
         return redirect(url_for('staff_list'))
+
     if request.method == 'POST':
         full_name = request.form.get('full_name', '').strip()
         email = request.form.get('email', '').strip().lower()
         errors = []
+
         if not full_name:
             errors.append("Full name is required.")
         elif len(full_name) > 100:
             errors.append("Full name must not exceed 100 characters.")
+
         if not email:
             errors.append("Email address is required.")
         elif len(email) > 120 or not EMAIL_PATTERN.match(email):
@@ -1033,18 +1376,18 @@ def edit_staff(staff_id):
             ).first()
             if existing_user:
                 errors.append("This email address is already in use.")
+
         if errors:
             for error in errors:
                 flash(error, "error")
         else:
             staff.full_name = full_name
             staff.email = email
+
             try:
                 db.session.commit()
                 flash("Staff details updated successfully.", "success")
-                return redirect(
-                    url_for('staff_detail', staff_id=staff.id)
-                )
+                return redirect(url_for('staff_detail', staff_id=staff.id))
             except IntegrityError:
                 db.session.rollback()
                 flash("This email address is already in use.", "error")
@@ -1052,9 +1395,10 @@ def edit_staff(staff_id):
                 db.session.rollback()
                 app.logger.exception("Failed to update staff details")
                 flash("Unable to update staff details. Please try again.", "error")
+
     return render_template('admin/staff/edit.html', staff=staff)
 
-# categories
+
 @app.route('/categories')
 @login_required
 def categories():
@@ -1151,7 +1495,6 @@ def toggle_category_status(id):
     return redirect(url_for('categories'))
 
 
-# products
 def read_product_form(current=None):
     errors = []
     name = request.form.get('name', '').strip()
@@ -1270,6 +1613,7 @@ def edit_product(product_id):
         return redirect(dashboard_for(current_user))
 
     product = db.session.get(Product, product_id)
+
     if product is None:
         flash("Product not found.", "error")
         return redirect(url_for('products'))
@@ -1282,8 +1626,12 @@ def edit_product(product_id):
         if errors:
             for error in errors:
                 flash(error, 'error')
-            return render_template('products/edit.html', product=product,
-                                   categories=category_list, suppliers=supplier_list)
+            return render_template(
+                'products/edit.html',
+                product=product,
+                categories=category_list,
+                suppliers=supplier_list
+            )
 
         for key, value in data.items():
             setattr(product, key, value)
@@ -1297,8 +1645,12 @@ def edit_product(product_id):
             app.logger.exception("Failed to update product")
             flash('Unable to update the product. Please try again.', 'error')
 
-    return render_template('products/edit.html', product=product,
-                           categories=category_list, suppliers=supplier_list)
+    return render_template(
+        'products/edit.html',
+        product=product,
+        categories=category_list,
+        suppliers=supplier_list
+    )
 
 
 @app.route('/products/<int:product_id>/delete', methods=['POST'])
@@ -1309,6 +1661,7 @@ def delete_product(product_id):
         return redirect(dashboard_for(current_user))
 
     product = db.session.get(Product, product_id)
+
     if product is None:
         flash("Product not found.", "error")
         return redirect(url_for('products'))
@@ -1327,7 +1680,8 @@ def delete_product(product_id):
         flash("Unable to delete this product.", "error")
 
     return redirect(url_for('products'))
-# suppliers
+
+
 @app.route('/suppliers')
 @login_required
 def suppliers():
@@ -1338,40 +1692,6 @@ def suppliers():
     supplier_list = Supplier.query.order_by(Supplier.full_name.asc()).all()
     return render_template('suppliers/index.html', suppliers=supplier_list)
 
-
-
-def clean_phone(value):
-    return re.sub(r'[\s\-()]', '', value)
-
-@app.route('/suppliers/add', methods=['GET', 'POST'])
-@login_required
-def add_supplier():
-    if not has_role('admin'):
-        flash("You are not authorized to add suppliers.", "error")
-        return redirect(dashboard_for(current_user))
-
-    if request.method == 'POST':
-        data, errors = read_supplier_form()
-
-        if errors:
-            for error in errors:
-                flash(error, 'error')
-            return render_template('suppliers/add.html')
-
-        try:
-            db.session.add(Supplier(**data, is_active=True))
-            db.session.commit()
-            flash('Supplier added successfully.', 'success')
-            return redirect(url_for('suppliers'))
-        except IntegrityError:
-            db.session.rollback()
-            flash('A supplier with this email or phone number already exists.', 'error')
-        except Exception:
-            db.session.rollback()
-            app.logger.exception("Failed to add supplier")
-            flash('Unable to save the supplier. Please try again.', 'error')
-
-    return render_template('suppliers/add.html')
 
 def read_supplier_form(current=None):
     errors = []
@@ -1416,6 +1736,37 @@ def read_supplier_form(current=None):
     return data, errors
 
 
+@app.route('/suppliers/add', methods=['GET', 'POST'])
+@login_required
+def add_supplier():
+    if not has_role('admin'):
+        flash("You are not authorized to add suppliers.", "error")
+        return redirect(dashboard_for(current_user))
+
+    if request.method == 'POST':
+        data, errors = read_supplier_form()
+
+        if errors:
+            for error in errors:
+                flash(error, 'error')
+            return render_template('suppliers/add.html')
+
+        try:
+            db.session.add(Supplier(**data, is_active=True))
+            db.session.commit()
+            flash('Supplier added successfully.', 'success')
+            return redirect(url_for('suppliers'))
+        except IntegrityError:
+            db.session.rollback()
+            flash('A supplier with this email or phone number already exists.', 'error')
+        except Exception:
+            db.session.rollback()
+            app.logger.exception("Failed to add supplier")
+            flash('Unable to save the supplier. Please try again.', 'error')
+
+    return render_template('suppliers/add.html')
+
+
 @app.route('/suppliers/<int:supplier_id>/edit', methods=['GET', 'POST'])
 @login_required
 def edit_supplier(supplier_id):
@@ -1424,6 +1775,7 @@ def edit_supplier(supplier_id):
         return redirect(dashboard_for(current_user))
 
     supplier = db.session.get(Supplier, supplier_id)
+
     if supplier is None:
         flash("Supplier not found.", "error")
         return redirect(url_for('suppliers'))
@@ -1453,6 +1805,7 @@ def edit_supplier(supplier_id):
 
     return render_template('suppliers/edit.html', supplier=supplier)
 
+
 @app.route('/suppliers/<int:supplier_id>/toggle-status', methods=['POST'])
 @login_required
 def toggle_supplier_status(supplier_id):
@@ -1461,6 +1814,7 @@ def toggle_supplier_status(supplier_id):
         return redirect(dashboard_for(current_user))
 
     supplier = db.session.get(Supplier, supplier_id)
+
     if supplier is None:
         flash("Supplier not found.", "error")
         return redirect(url_for('suppliers'))
@@ -1472,7 +1826,7 @@ def toggle_supplier_status(supplier_id):
     flash(f"Supplier {state} successfully!", "success")
     return redirect(url_for('suppliers'))
 
-# stock
+
 @app.route('/stock')
 @login_required
 def stock():
@@ -1487,6 +1841,7 @@ def stock():
         .all()
     )
     return render_template('stock/index.html', products=product_list)
+
 
 @app.route('/stock/add', methods=['GET', 'POST'])
 @login_required
@@ -1568,7 +1923,12 @@ def add_stock():
             app.logger.exception("Failed to record stock movement")
             flash("Unable to record stock movement. Please try again.", "error")
 
-    return render_template('stock/add.html', products=product_list, selected_product_id=selected_product_id)
+    return render_template(
+        'stock/add.html',
+        products=product_list,
+        selected_product_id=selected_product_id
+    )
+
 
 @app.route('/stock/movements')
 @login_required
@@ -1586,6 +1946,490 @@ def stock_movements():
 
     return render_template('stock/movements.html', movements=movements)
 
+
+@app.route('/sales')
+@login_required
+def sales():
+    if not has_role('admin', 'staff'):
+        flash("You are not authorized to view sales.", "error")
+        return redirect(dashboard_for(current_user))
+
+    sale_list = (
+        Sale.query
+        .options(selectinload(Sale.sale_items), joinedload(Sale.customer))
+        .order_by(Sale.sale_date.desc(), Sale.id.desc())
+        .all()
+    )
+
+    revenue = sum(
+        (sale.total_amount for sale in sale_list if sale.status != 'cancelled'),
+        Decimal('0.00')
+    )
+    pending_online = sum(
+        1 for sale in sale_list if sale.user_id is None and sale.status == 'pending'
+    )
+
+    return render_template(
+        'sales/index.html',
+        sales=sale_list,
+        revenue=revenue,
+        pending_online=pending_online
+    )
+
+
+@app.route('/sales/new', methods=['GET', 'POST'])
+@login_required
+def new_sale():
+    if not has_role('admin', 'staff'):
+        flash("You are not authorized to record sales.", "error")
+        return redirect(dashboard_for(current_user))
+
+    customer_id = ''
+    payment_method = 'cash'
+    rows = []
+
+    if request.method == 'POST':
+        customer_id = request.form.get('customer_id', '').strip()
+        payment_method = request.form.get('payment_method', '')
+        product_ids = request.form.getlist('product_id')
+        quantities = request.form.getlist('quantity')
+        rows = [
+            {'product_id': raw_id, 'quantity': raw_quantity}
+            for raw_id, raw_quantity in zip(product_ids, quantities)
+            if raw_id
+        ]
+        errors = []
+
+        customer = None
+        if customer_id:
+            try:
+                customer = db.session.get(Customer, int(customer_id))
+            except (ValueError, TypeError):
+                customer = None
+            if customer is None:
+                errors.append("Select a valid customer or choose walk-in customer.")
+
+        if payment_method not in STAFF_PAYMENT_VALUES:
+            errors.append("Choose a payment method.")
+
+        lines = {}
+        line_error = False
+        for row in rows:
+            try:
+                product_id = int(row['product_id'])
+                quantity = int(row['quantity'])
+            except (ValueError, TypeError):
+                line_error = True
+                break
+            if quantity <= 0:
+                line_error = True
+                break
+            lines[product_id] = lines.get(product_id, 0) + quantity
+
+        if line_error:
+            errors.append("Enter a valid product and a whole-number quantity on every line.")
+        elif not lines:
+            errors.append("Add at least one product to the sale.")
+
+        for error in errors:
+            flash(error, "error")
+
+        if not errors:
+            try:
+                sale = Sale(
+                    customer_id=customer.id if customer else None,
+                    user_id=current_user.id,
+                    full_name=customer.full_name if customer else 'Walk-in customer',
+                    email=customer.email if customer else None,
+                    phone=customer.phone if customer else None,
+                    payment_method=payment_method,
+                    payment_status='paid',
+                    status='completed',
+                    total_amount=Decimal('0.00')
+                )
+                db.session.add(sale)
+                db.session.flush()
+                sale.order_number = f"SAL-{sale.id:05d}"
+
+                sale_total = Decimal('0.00')
+
+                for product_id, quantity in lines.items():
+                    product = db.session.get(Product, product_id)
+
+                    if product is None or product.selling_price is None:
+                        raise SaleError("One of the selected products is no longer available.")
+
+                    if quantity > product.quantity:
+                        raise SaleError(
+                            f"Only {product.quantity} unit(s) of {product.name} in stock."
+                        )
+
+                    result = db.session.execute(
+                        update(Product)
+                        .where(Product.id == product.id, Product.quantity >= quantity)
+                        .values(quantity=Product.quantity - quantity)
+                    )
+
+                    if result.rowcount == 0:
+                        raise SaleError(
+                            f"Not enough stock for {product.name}. Please check and try again."
+                        )
+
+                    unit_price = product.selling_price
+                    subtotal = unit_price * quantity
+                    sale_total += subtotal
+
+                    db.session.add(SaleItem(
+                        sale_id=sale.id,
+                        product_id=product.id,
+                        quantity=quantity,
+                        unit_price=unit_price,
+                        subtotal=subtotal
+                    ))
+
+                    db.session.add(StockMovement(
+                        product_id=product.id,
+                        user_id=current_user.id,
+                        movement_type='OUT',
+                        quantity=quantity,
+                        reason=f"Sale {sale.order_number}"
+                    ))
+
+                sale.total_amount = sale_total
+                db.session.commit()
+
+                flash(f"Sale {sale.order_number} completed.", "success")
+                return redirect(url_for('sale_detail', sale_id=sale.id))
+
+            except SaleError as error:
+                db.session.rollback()
+                flash(str(error), "error")
+
+            except Exception:
+                db.session.rollback()
+                app.logger.exception("Failed to record sale")
+                flash("Unable to complete the sale. Please try again.", "error")
+
+    return render_template(
+        'sales/new.html',
+        customers=Customer.query.order_by(Customer.full_name.asc()).all(),
+        products_data=sale_form_products(),
+        rows=rows,
+        customer_id=customer_id,
+        payment_method=payment_method,
+        payment_methods=STAFF_PAYMENT_METHODS
+    )
+
+
+@app.route('/sales/<int:sale_id>')
+@login_required
+def sale_detail(sale_id):
+    if not has_role('admin', 'staff'):
+        flash("You are not authorized to view sales.", "error")
+        return redirect(dashboard_for(current_user))
+
+    sale = db.session.get(Sale, sale_id)
+
+    if sale is None:
+        flash("Sale not found.", "error")
+        return redirect(url_for('sales'))
+
+    return render_template(
+        'sales/detail.html',
+        sale=sale,
+        payment_label=SALE_PAYMENT_LABELS.get(sale.payment_method, sale.payment_method or 'N/A')
+    )
+
+@app.route('/sales/<int:sale_id>/action', methods=['POST'])
+@login_required
+def sale_action(sale_id):
+    if not has_role('admin', 'staff'):
+        flash("You are not authorized to process orders.", "error")
+        return redirect(dashboard_for(current_user))
+
+    sale = db.session.get(Sale, sale_id)
+
+    if sale is None:
+        flash("Order not found.", "error")
+        return redirect(url_for('sales'))
+
+    if not (sale.order_number or '').startswith('ORD-'):
+        flash("Only online orders can be processed here.", "error")
+        return redirect(url_for('sale_detail', sale_id=sale.id))
+
+    action = request.form.get('action', '')
+
+    try:
+        if action == 'confirm':
+            result = db.session.execute(
+                update(Sale)
+                .where(Sale.id == sale.id, Sale.status == 'pending')
+                .values(status='confirmed')
+            )
+            if result.rowcount == 0:
+                raise SaleError("This order can no longer be confirmed.")
+            message = f"Order {sale.order_number} confirmed."
+
+        elif action == 'paid':
+            result = db.session.execute(
+                update(Sale)
+                .where(
+                    Sale.id == sale.id,
+                    Sale.payment_status == 'pending',
+                    Sale.status != 'cancelled'
+                )
+                .values(payment_status='paid')
+            )
+            if result.rowcount == 0:
+                raise SaleError("This payment cannot be marked as paid.")
+            message = f"Payment for {sale.order_number} marked as paid."
+
+        elif action == 'deliver':
+            if sale.payment_status != 'paid' and sale.payment_method != 'pay_on_delivery':
+                raise SaleError("Mark the payment as received before delivering this order.")
+            result = db.session.execute(
+                update(Sale)
+                .where(Sale.id == sale.id, Sale.status == 'confirmed')
+                .values(status='delivered', payment_status='paid')
+            )
+            if result.rowcount == 0:
+                raise SaleError("Only a confirmed order can be marked as delivered.")
+            message = f"Order {sale.order_number} marked as delivered."
+
+        elif action == 'cancel':
+            was_paid = sale.payment_status == 'paid'
+            result = db.session.execute(
+                update(Sale)
+                .where(Sale.id == sale.id, Sale.status.in_(['pending', 'confirmed']))
+                .values(status='cancelled')
+            )
+            if result.rowcount == 0:
+                raise SaleError("This order can no longer be cancelled.")
+
+            for item in sale.sale_items:
+                db.session.execute(
+                    update(Product)
+                    .where(Product.id == item.product_id)
+                    .values(quantity=Product.quantity + item.quantity)
+                )
+                db.session.add(StockMovement(
+                    product_id=item.product_id,
+                    user_id=current_user.id,
+                    movement_type='IN',
+                    quantity=item.quantity,
+                    reason=f"Cancelled order {sale.order_number}"
+                ))
+
+            message = f"Order {sale.order_number} cancelled and stock returned."
+            if was_paid:
+                message += " The payment was already received, so remember to refund the customer."
+
+        else:
+            raise SaleError("Invalid action.")
+
+        db.session.commit()
+        flash(message, "success")
+
+    except SaleError as error:
+        db.session.rollback()
+        flash(str(error), "error")
+
+    except Exception:
+        db.session.rollback()
+        app.logger.exception("Failed to process order")
+        flash("Unable to update the order. Please try again.", "error")
+
+    return redirect(url_for('sale_detail', sale_id=sale.id))
+
+
+@app.route('/reports')
+@login_required
+def reports():
+    if not has_role('admin'):
+        flash("You are not authorized to view reports.", "error")
+        return redirect(dashboard_for(current_user))
+
+    today = datetime.now(LAGOS).date()
+
+    total_count, total_amount = sales_totals()
+    today_count, today_amount = sales_totals(
+        Sale.sale_date >= local_day_start_utc(today),
+        Sale.sale_date < local_day_start_utc(today + timedelta(days=1))
+    )
+
+    return render_template(
+        'reports/index.html',
+        total_count=total_count,
+        total_amount=total_amount,
+        today_count=today_count,
+        today_amount=today_amount,
+        movement_count=StockMovement.query.count(),
+        low_stock_count=Product.query.filter(Product.quantity <= LOW_STOCK_LEVEL).count()
+    )
+
+
+@app.route('/reports/sales')
+@login_required
+def sales_report():
+    if not has_role('admin'):
+        flash("You are not authorized to view reports.", "error")
+        return redirect(dashboard_for(current_user))
+
+    period = request.args.get('period', '30d')
+    source = request.args.get('source', 'all')
+    raw_from = request.args.get('from', '').strip()
+    raw_to = request.args.get('to', '').strip()
+    page = request.args.get('page', 1, type=int)
+
+    if period not in REPORT_PERIOD_KEYS:
+        period = '30d'
+
+    if source not in REPORT_SOURCE_KEYS:
+        source = 'all'
+
+    today = datetime.now(LAGOS).date()
+    custom_from = parse_report_date(raw_from)
+    custom_to = parse_report_date(raw_to)
+    is_custom = bool(custom_from or custom_to)
+
+    if is_custom:
+        start_date = custom_from or custom_to
+        end_date = custom_to or custom_from
+        if end_date < start_date:
+            start_date, end_date = end_date, start_date
+        range_args = {'from': start_date.isoformat(), 'to': end_date.isoformat()}
+    else:
+        if period == 'today':
+            start_date = today
+        elif period == '7d':
+            start_date = today - timedelta(days=6)
+        elif period == 'month':
+            start_date = today.replace(day=1)
+        elif period == 'all':
+            first_sale = db.session.query(func.min(Sale.sale_date)).scalar()
+            start_date = to_local_date(first_sale) if first_sale else today
+        else:
+            start_date = today - timedelta(days=29)
+        end_date = today
+        range_args = {'period': period}
+
+    if start_date == end_date:
+        range_label = start_date.strftime('%d %b %Y')
+    else:
+        range_label = f"{start_date.strftime('%d %b %Y')} to {end_date.strftime('%d %b %Y')}"
+
+    source_condition = None
+    if source == 'store':
+        source_condition = Sale.order_number.like('SAL-%')
+    elif source == 'online':
+        source_condition = Sale.order_number.like('ORD-%')
+
+    conditions = [
+        Sale.sale_date >= local_day_start_utc(start_date),
+        Sale.sale_date < local_day_start_utc(end_date + timedelta(days=1))
+    ]
+    today_conditions = [
+        Sale.sale_date >= local_day_start_utc(today),
+        Sale.sale_date < local_day_start_utc(today + timedelta(days=1))
+    ]
+
+    if source_condition is not None:
+        conditions.append(source_condition)
+        today_conditions.append(source_condition)
+
+    total_count, total_amount = sales_totals(*conditions)
+    today_count, today_amount = sales_totals(*today_conditions)
+    cancelled_count = Sale.query.filter(Sale.status == 'cancelled', *conditions).count()
+
+    average_sale = (
+        (total_amount / total_count).quantize(Decimal('0.01'))
+        if total_count else Decimal('0.00')
+    )
+
+    by_day = {}
+    for sale_date, amount, order_number in (
+        db.session.query(Sale.sale_date, Sale.total_amount, Sale.order_number)
+        .filter(Sale.status != 'cancelled', *conditions)
+        .all()
+    ):
+        day = to_local_date(sale_date)
+        entry = by_day.setdefault(
+            day,
+            {'count': 0, 'amount': Decimal('0.00'), 'online': 0, 'store': 0}
+        )
+        entry['count'] += 1
+        entry['amount'] += Decimal(str(amount or 0))
+        if (order_number or '').startswith('ORD-'):
+            entry['online'] += 1
+        else:
+            entry['store'] += 1
+
+    day_rows = [{'date': day, **by_day[day]} for day in sorted(by_day, reverse=True)]
+
+    peak = max((row['amount'] for row in day_rows), default=Decimal('0.00'))
+    best_day = None
+    for row in day_rows:
+        row['pct'] = int(row['amount'] / peak * 100) if peak > 0 else 0
+        if best_day is None or row['amount'] > best_day['amount']:
+            best_day = row
+
+    chart_start = max(start_date, end_date - timedelta(days=29))
+    chart_peak = max(
+        (entry['amount'] for day, entry in by_day.items() if chart_start <= day <= end_date),
+        default=Decimal('0.00')
+    )
+
+    chart_days = []
+    cursor = chart_start
+    while cursor <= end_date:
+        entry = by_day.get(cursor)
+        amount = entry['amount'] if entry else Decimal('0.00')
+        height = max(int(amount / chart_peak * 100), 4) if chart_peak > 0 and amount > 0 else 0
+        chart_days.append({
+            'date': cursor,
+            'amount': amount,
+            'count': entry['count'] if entry else 0,
+            'height': height
+        })
+        cursor += timedelta(days=1)
+
+    pagination = (
+        Sale.query
+        .options(
+            joinedload(Sale.customer),
+            joinedload(Sale.user),
+            selectinload(Sale.sale_items)
+        )
+        .filter(*conditions)
+        .order_by(Sale.sale_date.desc(), Sale.id.desc())
+        .paginate(page=page, per_page=15, error_out=False)
+    )
+
+    return render_template(
+        'reports/sales.html',
+        today=today,
+        start_date=start_date,
+        end_date=end_date,
+        range_label=range_label,
+        is_custom=is_custom,
+        period=period,
+        source=source,
+        periods=REPORT_PERIODS,
+        sources=REPORT_SOURCES,
+        range_args=range_args,
+        filter_args={**range_args, 'source': source},
+        total_count=total_count,
+        total_amount=total_amount,
+        today_count=today_count,
+        today_amount=today_amount,
+        cancelled_count=cancelled_count,
+        average_sale=average_sale,
+        chart_days=chart_days,
+        day_rows=day_rows[:60],
+        rows_truncated=len(day_rows) > 60,
+        best_day=best_day,
+        pagination=pagination
+    )
 
 
 @app.route('/logout')

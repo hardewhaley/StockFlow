@@ -1,0 +1,60 @@
+{% extends "base.html" %}
+
+{% block title %}Reports | StockFlow{% endblock %}
+
+{% block content %}
+<section class="ad-page">
+
+    <header class="ad-header">
+        <div>
+            <h1>Reports</h1>
+            <p>Review how your store is performing.</p>
+        </div>
+    </header>
+
+    <div class="rp-cards">
+
+        <a href="{{ url_for('sales_report') }}" class="rp-card rp-card-main">
+            <div class="rp-main-text">
+                <span class="rp-card-icon rp-icon-light"><i class="fa-solid fa-chart-line"></i></span>
+                <h2>Sales Report</h2>
+                <p>Total sales, today's sales, transactions, full sales history and sales by date.</p>
+                <span class="rp-card-link rp-link-light">Open report <i class="fa-solid fa-arrow-right"></i></span>
+            </div>
+
+            <ul class="rp-main-stats">
+                <li>
+                    <strong>₦{{ "{:,.2f}".format(total_amount) }}</strong>
+                    <span>Total Sales</span>
+                </li>
+                <li>
+                    <strong>{{ total_count }}</strong>
+                    <span>Transactions</span>
+                </li>
+                <li>
+                    <strong>₦{{ "{:,.2f}".format(today_amount) }}</strong>
+                    <span>Today · {{ today_count }} sale{{ '' if today_count == 1 else 's' }}</span>
+                </li>
+            </ul>
+        </a>
+
+        <a href="{{ url_for('stock_movements') }}" class="rp-card">
+            <span class="rp-card-icon"><i class="fa-solid fa-clock-rotate-left"></i></span>
+            <h2>Stock Movements</h2>
+            <p>Every stock in and stock out, with the reason and who recorded it.</p>
+            <span class="rp-card-meta">{{ movement_count }} record{{ '' if movement_count == 1 else 's' }}</span>
+            <span class="rp-card-link">Open report <i class="fa-solid fa-arrow-right"></i></span>
+        </a>
+
+        <a href="{{ url_for('admin_stock_alerts') }}" class="rp-card">
+            <span class="rp-card-icon rp-icon-amber"><i class="fa-solid fa-triangle-exclamation"></i></span>
+            <h2>Low Stock Alerts</h2>
+            <p>Products that are running out and need restocking.</p>
+            <span class="rp-card-meta">{{ low_stock_count }} product{{ '' if low_stock_count == 1 else 's' }} need attention</span>
+            <span class="rp-card-link">Open report <i class="fa-solid fa-arrow-right"></i></span>
+        </a>
+
+    </div>
+
+</section>
+{% endblock %}

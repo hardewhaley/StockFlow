@@ -1,0 +1,178 @@
+{% extends "base.html" %}
+
+{% block title %}Sale {{ sale.order_number or 'SAL-%05d'|format(sale.id) }} | StockFlow{% endblock %}
+
+{% block content %}
+{% set ref = sale.order_number or 'SAL-%05d'|format(sale.id) %}
+{% set is_online = (sale.order_number or '').startswith('ORD-') %}
+{% set can_deliver = sale.payment_status == 'paid' or sale.payment_method == 'pay_on_delivery' %}
+
+<section class="sales-page">
+
+    <header class="page-header no-print">
+        <div>
+            <h1>Sale {{ ref }}</h1>
+            <p>{{ sale.sale_date|local_time }}</p>
+        </div>
+
+        <div class="header-actions">
+            <a href="{{ url_for('sales') }}" class="btn-back">
+                <i class="fa-solid fa-arrow-left"></i>
+                Back to Sales
+            </a>
+            <button type="button" class="btn-primary" onclick="window.print()">
+                <i class="fa-solid fa-print"></i>
+                Print Receipt
+            </button>
+        </div>
+    </header>
+
+    {% if is_online and sale.status in ['pending', 'confirmed'] %}
+    <div class="sales-panel order-actions no-print">
+        <h2 class="panel-title">
+            <i class="fa-solid fa-list-check"></i>
+            Process Order
+        </h2>
+        <p class="panel-description">
+            {% if sale.status == 'pending' %}
+                This order is waiting for your approval. Confirm it to start preparing it.
+            {% else %}
+                This order is confirmed. Mark it as delivered once the customer has received it.
+            {% endif %}
+        </p>
+
+        <div class="action-row">
+            {% if sale.status == 'pending' %}
+            <form method="POST" action="{{ url_for('sale_action', sale_id=sale.id) }}">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <input type="hidden" name="action" value="confirm">
+                <button type="submit" class="btn-action act-confirm">
+                    <i class="fa-solid fa-circle-check"></i>
+                    Confirm Order
+                </button>
+            </form>
+            {% endif %}
+
+            {% if sale.payment_status == 'pending' %}
+            <form method="POST" action="{{ url_for('sale_action', sale_id=sale.id) }}"
+                  onsubmit="return confirm('Mark this payment as received?');">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <input type="hidden" name="action" value="paid">
+                <button type="submit" class="btn-action act-paid">
+                    <i class="fa-solid fa-money-bill-wave"></i>
+                    Mark as Paid
+                </button>
+            </form>
+            {% endif %}
+
+            {% if sale.status == 'confirmed' %}
+            <form method="POST" action="{{ url_for('sale_action', sale_id=sale.id) }}"
+                  onsubmit="return confirm('Mark this order as delivered?');">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <input type="hidden" name="action" value="deliver">
+                <button type="submit" class="btn-action act-deliver" {% if not can_deliver %}disabled{% endif %}>
+                    <i class="fa-solid fa-truck-fast"></i>
+                    Mark as Delivered
+                </button>
+            </form>
+            {% endif %}
+
+            <form method="POST" action="{{ url_for('sale_action', sale_id=sale.id) }}"
+                  onsubmit="return confirm('Cancel this order? The items will be returned to stock.');">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <input type="hidden" name="action" value="cancel">
+                <button type="submit" class="btn-action act-cancel">
+                    <i class="fa-solid fa-ban"></i>
+                    Cancel Order
+                </button>
+            </form>
+        </div>
+
+        {% if sale.status == 'confirmed' and not can_deliver %}
+        <p class="action-note">
+            <i class="fa-solid fa-circle-info"></i>
+            Mark the payment as received before delivering this order.
+        </p>
+        {% endif %}
+    </div>
+    {% elif is_online and sale.status == 'cancelled' %}
+    <div class="order-banner banner-cancelled no-print">
+        <i class="fa-solid fa-circle-xmark"></i>
+        <span>This order was cancelled and the items were returned to stock.</span>
+    </div>
+    {% elif is_online and sale.status == 'delivered' %}
+    <div class="order-banner banner-delivered no-print">
+        <i class="fa-solid fa-circle-check"></i>
+        <span>This order has been delivered.</span>
+    </div>
+    {% endif %}
+
+    <div class="sales-panel receipt">
+
+        <div class="receipt-head">
+            <div>
+                <span class="receipt-brand">Stock<span>Flow</span></span>
+                <h2>{{ ref }}</h2>
+                <p>{{ sale.sale_date|local_time }}</p>
+            </div>
+
+            <div class="receipt-badges">
+                <span class="sale-badge sb-{{ sale.status }}">{{ sale.status|capitalize }}</span>
+                <span class="sale-badge sb-{{ sale.payment_status }}">{{ sale.payment_status|capitalize }}</span>
+            </div>
+        </div>
+
+        <div class="info-grid">
+            <div class="info-item">
+                <span>Customer</span>
+                <p>{{ sale.full_name or (sale.customer.full_name if sale.customer else 'Walk-in customer') }}</p>
+            </div>
+            <div class="info-item">
+                <span>Phone</span>
+                <p>{{ sale.phone or 'N/A' }}</p>
+            </div>
+            <div class="info-item">
+                <span>Email</span>
+                <p>{{ sale.email or 'N/A' }}</p>
+            </div>
+            <div class="info-item">
+                <span>Payment Method</span>
+                <p>{{ payment_label }}</p>
+            </div>
+            <div class="info-item">
+                <span>Source</span>
+                <p>{{ 'In-store' if sale.user_id else 'Online order' }}</p>
+            </div>
+            <div class="info-item">
+                <span>Sold By</span>
+                <p>{{ sale.user.full_name if sale.user else 'Online order' }}</p>
+            </div>
+            {% if sale.address %}
+            <div class="info-item info-wide">
+                <span>Delivery Address</span>
+                <p>{{ sale.address }}</p>
+            </div>
+            {% endif %}
+        </div>
+
+        <ul class="receipt-items">
+            {% for item in sale.sale_items %}
+            <li>
+                <div class="receipt-item-info">
+                    <strong>{{ item.product.name }}</strong>
+                    <small>₦{{ "{:,.2f}".format(item.unit_price) }} × {{ item.quantity }}</small>
+                </div>
+                <span>₦{{ "{:,.2f}".format(item.subtotal) }}</span>
+            </li>
+            {% endfor %}
+        </ul>
+
+        <div class="side-total">
+            <span>Total</span>
+            <strong>₦{{ "{:,.2f}".format(sale.total_amount) }}</strong>
+        </div>
+
+    </div>
+
+</section>
+{% endblock %}

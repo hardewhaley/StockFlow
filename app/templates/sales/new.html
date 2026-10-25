@@ -1,0 +1,275 @@
+{% extends "base.html" %}
+
+{% block title %}New Sale | StockFlow{% endblock %}
+
+{% block content %}
+<section class="sales-page">
+
+    <header class="page-header">
+        <div>
+            <h1>New Sale</h1>
+            <p>Choose a customer, add products and complete the sale.</p>
+        </div>
+
+        <a href="{{ url_for('sales') }}" class="btn-back">
+            <i class="fa-solid fa-arrow-left"></i>
+            Back to Sales
+        </a>
+    </header>
+
+    <form method="POST" action="{{ url_for('new_sale') }}" id="saleForm" class="sale-layout">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+        <div class="sale-main">
+
+            <div class="sales-panel">
+                <h2 class="panel-title">
+                    <i class="fa-solid fa-user"></i>
+                    Customer
+                </h2>
+                <p class="panel-description">Pick a registered customer, or leave it as walk-in.</p>
+
+                <div class="field">
+                    <label for="customer_id">Customer</label>
+                    <select id="customer_id" name="customer_id">
+                        <option value="">Walk-in customer</option>
+                        {% for customer in customers %}
+                        <option value="{{ customer.id }}" {% if customer_id == customer.id|string %}selected{% endif %}>
+                            {{ customer.full_name }} ({{ customer.phone }})
+                        </option>
+                        {% endfor %}
+                    </select>
+                </div>
+            </div>
+
+            <div class="sales-panel">
+                <h2 class="panel-title">
+                    <i class="fa-solid fa-box"></i>
+                    Products
+                </h2>
+                <p class="panel-description">Add each product and its quantity. Out-of-stock products are not listed.</p>
+
+                <div class="sale-lines" id="saleLines"></div>
+
+                <button type="button" class="btn-add-line" id="addLine">
+                    <i class="fa-solid fa-plus"></i>
+                    Add Product
+                </button>
+            </div>
+
+        </div>
+
+        <aside class="sales-panel sale-side">
+            <h2 class="panel-title">
+                <i class="fa-solid fa-calculator"></i>
+                Sale Summary
+            </h2>
+
+            <div class="side-row">
+                <span>Items</span>
+                <strong id="saleItems">0</strong>
+            </div>
+
+            <div class="side-total">
+                <span>Total</span>
+                <strong id="saleTotal">₦0.00</strong>
+            </div>
+
+            <fieldset class="method-group">
+                <legend>Payment Method</legend>
+
+                <div class="method-options">
+                    {% for method in payment_methods %}
+                    <label class="method-option">
+                        <input type="radio" name="payment_method" value="{{ method.value }}"
+                               {% if payment_method == method.value %}checked{% endif %} required>
+                        <span class="method-card">
+                            <i class="fa-solid {{ method.icon }}"></i>
+                            <span>{{ method.label }}</span>
+                        </span>
+                    </label>
+                    {% endfor %}
+                </div>
+            </fieldset>
+
+            <button type="submit" class="btn-complete" id="completeSale" disabled>
+                <i class="fa-solid fa-check"></i>
+                <span>Complete Sale</span>
+            </button>
+
+            <a href="{{ url_for('sales') }}" class="side-cancel">Cancel</a>
+        </aside>
+
+    </form>
+
+    <template id="lineTemplate">
+        <div class="sale-line">
+            <label class="line-field line-product">
+                <span class="line-label">Product</span>
+                <select name="product_id"></select>
+            </label>
+
+            <label class="line-field line-qty">
+                <span class="line-label">Quantity</span>
+                <input type="number" name="quantity" min="1" step="1" value="1" inputmode="numeric" required>
+            </label>
+
+            <div class="line-field line-subtotal">
+                <span class="line-label">Subtotal</span>
+                <strong class="line-total">₦0.00</strong>
+            </div>
+
+            <button type="button" class="btn-remove-line" aria-label="Remove product">
+                <i class="fa-solid fa-xmark"></i>
+                <span class="remove-text">Remove</span>
+            </button>
+
+            <p class="line-hint"></p>
+        </div>
+    </template>
+
+    <script type="application/json" id="products-data">{{ products_data|tojson }}</script>
+    <script type="application/json" id="initial-rows">{{ rows|tojson }}</script>
+
+    <script>
+        (function () {
+            const products = JSON.parse(document.getElementById('products-data').textContent);
+            const initialRows = JSON.parse(document.getElementById('initial-rows').textContent);
+            const byId = new Map(products.map(product => [String(product.id), product]));
+
+            const form = document.getElementById('saleForm');
+            const lines = document.getElementById('saleLines');
+            const template = document.getElementById('lineTemplate');
+            const addButton = document.getElementById('addLine');
+            const totalEl = document.getElementById('saleTotal');
+            const itemsEl = document.getElementById('saleItems');
+            const submitButton = document.getElementById('completeSale');
+
+            function money(value) {
+                return '₦' + value.toLocaleString('en-NG', {
+                    minimumFractionDigits: 2,
+                    maximumFractionDigits: 2
+                });
+            }
+
+            function createOption(value, text) {
+                const option = document.createElement('option');
+                option.value = value;
+                option.textContent = text;
+                return option;
+            }
+
+            function refresh() {
+                const chosen = new Set();
+                lines.querySelectorAll('select').forEach(select => {
+                    if (select.value) chosen.add(select.value);
+                });
+
+                let total = 0;
+                let items = 0;
+                let ready = false;
+                let hasError = false;
+
+                lines.querySelectorAll('.sale-line').forEach(line => {
+                    const select = line.querySelector('select');
+                    const qtyInput = line.querySelector('input');
+                    const hint = line.querySelector('.line-hint');
+                    const totalCell = line.querySelector('.line-total');
+                    const product = byId.get(select.value);
+
+                    Array.from(select.options).forEach(option => {
+                        option.disabled = option.value !== ''
+                            && option.value !== select.value
+                            && chosen.has(option.value);
+                    });
+
+                    if (!product) {
+                        qtyInput.removeAttribute('max');
+                        hint.textContent = '';
+                        hint.classList.remove('is-error');
+                        totalCell.textContent = money(0);
+                        return;
+                    }
+
+                    qtyInput.max = product.stock;
+                    const quantity = parseInt(qtyInput.value, 10);
+                    const valid = Number.isInteger(quantity) && quantity > 0;
+                    const overStock = valid && quantity > product.stock;
+
+                    if (overStock) {
+                        hint.textContent = 'Only ' + product.stock + ' in stock.';
+                        hint.classList.add('is-error');
+                        hasError = true;
+                    } else {
+                        hint.textContent = product.stock + ' in stock · ' + money(product.price) + ' each';
+                        hint.classList.remove('is-error');
+                    }
+
+                    if (!valid) {
+                        totalCell.textContent = money(0);
+                        hasError = true;
+                        return;
+                    }
+
+                    const subtotal = product.price * quantity;
+                    totalCell.textContent = money(subtotal);
+
+                    if (!overStock) {
+                        total += subtotal;
+                        items += quantity;
+                        ready = true;
+                    }
+                });
+
+                totalEl.textContent = money(total);
+                itemsEl.textContent = items;
+                submitButton.disabled = !ready || hasError;
+            }
+
+            function addLine(productId, quantity) {
+                const fragment = template.content.cloneNode(true);
+                const line = fragment.querySelector('.sale-line');
+                const select = line.querySelector('select');
+                const qtyInput = line.querySelector('input');
+
+                select.appendChild(createOption('', 'Select product'));
+                products.forEach(product => {
+                    select.appendChild(createOption(product.id, product.name));
+                });
+
+                if (productId && byId.has(String(productId))) {
+                    select.value = String(productId);
+                }
+
+                qtyInput.value = quantity || 1;
+
+                select.addEventListener('change', refresh);
+                qtyInput.addEventListener('input', refresh);
+
+                line.querySelector('.btn-remove-line').addEventListener('click', () => {
+                    line.remove();
+                    if (!lines.children.length) addLine();
+                    refresh();
+                });
+
+                lines.appendChild(line);
+                refresh();
+            }
+
+            addButton.addEventListener('click', () => addLine());
+
+            form.addEventListener('submit', () => {
+                submitButton.disabled = true;
+                submitButton.querySelector('span').textContent = 'Processing...';
+            });
+
+            if (initialRows.length) {
+                initialRows.forEach(row => addLine(row.product_id, row.quantity));
+            } else {
+                addLine();
+            }
+        })();
+    </script>
+
+</section>
+{% endblock %}

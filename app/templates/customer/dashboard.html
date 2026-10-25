@@ -1,62 +1,362 @@
 {% extends "base.html" %}
-{% block title %}Shop - StockFlow{% endblock %}
+
+{% block title %}Home | StockFlow{% endblock %}
+
 {% block content %}
-<section class="customer-dashboard">
-    <div class="customer-hero">
-        <div class="hero-content">
-            <span class="hero-label">WELCOME TO STOCKFLOW</span>
-            <h1>Find What You Need, <span>Shop With Ease.</span></h1>
+<script>document.documentElement.classList.add('hm-js');</script>
+
+{% set category_names = products|map(attribute='category.name')|unique|sort|list %}
+{% set in_stock_count = products|selectattr('quantity', 'gt', 0)|list|length %}
+{% set is_customer = current_user.is_authenticated and current_user.role == 'customer' %}
+{% set is_guest = not current_user.is_authenticated %}
+
+<section class="hm-page">
+
+    <div class="hm-hero">
+        <span class="hm-blob hm-blob-1"></span>
+        <span class="hm-blob hm-blob-2"></span>
+        <span class="hm-blob hm-blob-3"></span>
+
+        <div class="hm-hero-text">
+            <span class="hm-eyebrow">
+                <i class="fa-solid fa-bag-shopping"></i>
+                WELCOME TO STOCKFLOW
+            </span>
+
+            <h1>Find What You Need, <span class="hm-grad">Shop With Ease.</span></h1>
+
             <p>Browse our products and discover quality items available in StockFlow.</p>
-            <a href="#products" class="hero-btn">
-                Browse Products
-                <i class="fa-solid fa-arrow-right"></i>
-            </a>
+
+            <div class="hm-hero-actions">
+                <a href="#products" class="hm-btn hm-btn-light" id="hmBrowse">
+                    Browse Products
+                    <i class="fa-solid fa-arrow-right"></i>
+                </a>
+
+                {% if is_guest %}
+                <a href="{{ url_for('customer_register') }}" class="hm-btn hm-btn-glass">
+                    <i class="fa-solid fa-user-plus"></i>
+                    Create Account
+                </a>
+                {% elif is_customer %}
+                <a href="{{ url_for('cart') }}" class="hm-btn hm-btn-glass">
+                    <i class="fa-solid fa-cart-shopping"></i>
+                    View Cart
+                </a>
+                {% endif %}
+            </div>
+
+            <ul class="hm-hero-stats">
+                <li>
+                    <strong data-count="{{ products|length }}">{{ products|length }}</strong>
+                    <span>Products</span>
+                </li>
+                <li>
+                    <strong data-count="{{ in_stock_count }}">{{ in_stock_count }}</strong>
+                    <span>In Stock</span>
+                </li>
+                <li>
+                    <strong data-count="{{ category_names|length }}">{{ category_names|length }}</strong>
+                    <span>Categories</span>
+                </li>
+            </ul>
+        </div>
+
+        <div class="hm-hero-visual" aria-hidden="true">
+            <span class="hm-orb"><i class="fa-solid fa-bag-shopping"></i></span>
+
+            <span class="hm-float hm-float-1">
+                <i class="fa-solid fa-shield-halved"></i>
+                Secure Checkout
+            </span>
+
+            <span class="hm-float hm-float-2">
+                <i class="fa-solid fa-truck-fast"></i>
+                Track Your Order
+            </span>
+
+            <span class="hm-float hm-float-3">
+                <i class="fa-solid fa-circle-check"></i>
+                Quality Items
+            </span>
         </div>
     </div>
-    <div class="products-section" id="products">
-        <div class="section-heading">
+
+    <div class="hm-features">
+        <div class="hm-feature" data-reveal style="--i:0">
+            <span class="hm-feature-icon"><i class="fa-solid fa-medal"></i></span>
             <div>
-                <span>OUR PRODUCTS</span>
-                <h2>Browse Products</h2>
+                <strong>Quality Products</strong>
+                <small>Items you can trust</small>
             </div>
-            <p>Explore the products currently available in our store.</p>
         </div>
-        <div class="product-grid">
+
+        <div class="hm-feature" data-reveal style="--i:1">
+            <span class="hm-feature-icon"><i class="fa-solid fa-bolt"></i></span>
+            <div>
+                <strong>Easy Checkout</strong>
+                <small>Order in a few clicks</small>
+            </div>
+        </div>
+
+        <div class="hm-feature" data-reveal style="--i:2">
+            <span class="hm-feature-icon"><i class="fa-solid fa-wallet"></i></span>
+            <div>
+                <strong>Flexible Payment</strong>
+                <small>Delivery, transfer or card</small>
+            </div>
+        </div>
+
+        <div class="hm-feature" data-reveal style="--i:3">
+            <span class="hm-feature-icon"><i class="fa-solid fa-location-dot"></i></span>
+            <div>
+                <strong>Order Tracking</strong>
+                <small>Follow every step</small>
+            </div>
+        </div>
+    </div>
+
+    <section class="hm-products" id="products">
+
+        <div class="hm-section-head" data-reveal style="--i:0">
+            <div>
+                <span class="hm-kicker">OUR PRODUCTS</span>
+                <h2>Browse Products</h2>
+                <p>Explore the products currently available in our store.</p>
+            </div>
+        </div>
+
+        {% if products %}
+        <div class="hm-toolbar" data-reveal style="--i:1">
+            <label class="hm-search">
+                <i class="fa-solid fa-magnifying-glass"></i>
+                <input type="search" id="hmSearch" placeholder="Search products..." autocomplete="off">
+            </label>
+
+            <div class="hm-chips">
+                <button type="button" class="hm-chip active" data-category="all">All</button>
+                {% for name in category_names %}
+                <button type="button" class="hm-chip" data-category="{{ name|lower }}">{{ name }}</button>
+                {% endfor %}
+            </div>
+        </div>
+
+        <p class="hm-count" id="hmCount">{{ products|length }} product{{ '' if products|length == 1 else 's' }}</p>
+
+        <div class="hm-grid">
             {% for product in products %}
-                <div class="product-card">
-                    <div class="product-image">
-                        <i class="fa-solid fa-box-open"></i>
-                    </div>
-                    <div class="product-info">
-                        <h3>{{ product.name }}</h3>
-                        <p class="product-description">{{ product.description or 'No description available.' }}</p>
-                        <div class="product-bottom">
-                            <span class="product-price">₦{{ "{:,.2f}".format(product.selling_price or 0) }}</span>
-                            <span class="product-stock">
-                                {% if product.quantity > 0 %}{{ product.quantity }} available{% else %}Out of stock{% endif %}
-                            </span>
-                        </div>
-                        <div class="product-actions">
-                            <form action="{{ url_for('add_to_cart', product_id=product.id) }}" method="POST">
-                                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                                <input type="hidden" name="quantity" value="1">
-                                <button type="submit" class="product-btn" {% if product.quantity <= 0 %}disabled{% endif %}>
-                                    <i class="fa-solid fa-cart-shopping"></i>
-                                    Add to Cart
-                                </button>
-                            </form>
-                            <a href="{{ url_for('product_detail', product_id=product.id) }}" class="view-btn">View</a>
-                        </div>
-                    </div>
-                </div>
+            {% set label = product.name|lower %}
+
+            {% if 'phone' in label %}
+                {% set icon = 'fa-mobile-screen-button' %}
+            {% elif 'power' in label or 'battery' in label or 'charger' in label %}
+                {% set icon = 'fa-battery-full' %}
+            {% elif 'head' in label or 'earbud' in label or 'earphone' in label or 'speaker' in label %}
+                {% set icon = 'fa-headphones' %}
+            {% elif 'laptop' in label or 'computer' in label %}
+                {% set icon = 'fa-laptop' %}
+            {% elif 'watch' in label %}
+                {% set icon = 'fa-clock' %}
             {% else %}
-                <div class="empty-products">
-                    <i class="fa-solid fa-box-open"></i>
-                    <h3>No Products Available</h3>
-                    <p>There are currently no products available.</p>
+                {% set icon = 'fa-box-open' %}
+            {% endif %}
+
+            <article class="hm-product {% if product.quantity <= 0 %}is-sold{% endif %}"
+                     data-reveal style="--i:{{ loop.index0 % 4 }}"
+                     data-name="{{ product.name|lower }}"
+                     data-category="{{ product.category.name|lower }}">
+
+                <div class="hm-product-art">
+                    {% if product.quantity <= 0 %}
+                        <span class="hm-tag hm-tag-sold">SOLD OUT</span>
+                    {% elif product.id in newest_ids %}
+                        <span class="hm-tag hm-tag-new">NEW</span>
+                    {% endif %}
+                    <i class="fa-solid {{ icon }}"></i>
                 </div>
+
+                <div class="hm-product-body">
+                    <span class="hm-product-cat">{{ product.category.name }}</span>
+                    <h3>{{ product.name }}</h3>
+                    <p class="hm-product-desc">{{ product.description or 'No description available.' }}</p>
+
+                    <div class="hm-product-bottom">
+                        <span class="hm-price">₦{{ "{:,.2f}".format(product.selling_price or 0) }}</span>
+
+                        {% if product.quantity <= 0 %}
+                            <span class="hm-stock hm-stock-out">Out of stock</span>
+                        {% elif product.quantity <= 5 %}
+                            <span class="hm-stock hm-stock-low">Only {{ product.quantity }} left</span>
+                        {% else %}
+                            <span class="hm-stock">{{ product.quantity }} available</span>
+                        {% endif %}
+                    </div>
+
+                    <div class="hm-product-actions">
+                        {% if is_customer %}
+                        <form action="{{ url_for('add_to_cart', product_id=product.id) }}" method="POST">
+                            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                            <input type="hidden" name="quantity" value="1">
+                            <button type="submit" class="hm-add" {% if product.quantity <= 0 %}disabled{% endif %}>
+                                <i class="fa-solid fa-cart-shopping"></i>
+                                Add to Cart
+                            </button>
+                        </form>
+                        {% elif is_guest %}
+                        <a href="{{ url_for('customer_login') }}" class="hm-add">
+                            <i class="fa-solid fa-right-to-bracket"></i>
+                            Login to Buy
+                        </a>
+                        {% endif %}
+
+                        <a href="{{ url_for('product_detail', product_id=product.id) }}" class="hm-view">View</a>
+                    </div>
+                </div>
+            </article>
             {% endfor %}
         </div>
-    </div>
+
+        <div class="hm-empty" id="hmNoResults" hidden>
+            <span class="hm-empty-icon"><i class="fa-solid fa-magnifying-glass"></i></span>
+            <h3>No matching products</h3>
+            <p>Try a different search or choose another category.</p>
+        </div>
+
+        {% else %}
+        <div class="hm-empty">
+            <span class="hm-empty-icon"><i class="fa-solid fa-box-open"></i></span>
+            <h3>No Products Available</h3>
+            <p>There are currently no products available. Please check back soon.</p>
+        </div>
+        {% endif %}
+
+    </section>
+
+    {% if is_guest %}
+    <section class="hm-cta" data-reveal style="--i:0">
+        <span class="hm-blob hm-blob-1"></span>
+        <div class="hm-cta-text">
+            <h2>Ready to start shopping?</h2>
+            <p>Create a free account to add products to your cart, check out and track every order.</p>
+        </div>
+        <div class="hm-cta-actions">
+            <a href="{{ url_for('customer_register') }}" class="hm-btn hm-btn-light">
+                <i class="fa-solid fa-user-plus"></i>
+                Create Account
+            </a>
+            <a href="{{ url_for('customer_login') }}" class="hm-btn hm-btn-glass">Login</a>
+        </div>
+    </section>
+    {% elif is_customer %}
+    <section class="hm-cta" data-reveal style="--i:0">
+        <span class="hm-blob hm-blob-1"></span>
+        <div class="hm-cta-text">
+            <h2>Welcome back, {{ current_user.full_name.split()[0] if current_user.full_name else 'there' }}!</h2>
+            <p>See your orders, check your cart and pick up where you left off.</p>
+        </div>
+        <div class="hm-cta-actions">
+            <a href="{{ url_for('customer_dashboard') }}" class="hm-btn hm-btn-light">
+                <i class="fa-solid fa-gauge"></i>
+                My Dashboard
+            </a>
+            <a href="{{ url_for('my_orders') }}" class="hm-btn hm-btn-glass">My Orders</a>
+        </div>
+    </section>
+    {% endif %}
+
 </section>
+
+<script>
+    (function () {
+        const reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+        const revealItems = document.querySelectorAll('[data-reveal]');
+
+        if (reduce || !('IntersectionObserver' in window)) {
+            revealItems.forEach(item => item.classList.add('is-visible'));
+        } else {
+            const observer = new IntersectionObserver(entries => {
+                entries.forEach(entry => {
+                    if (entry.isIntersecting) {
+                        entry.target.classList.add('is-visible');
+                        observer.unobserve(entry.target);
+                    }
+                });
+            }, { threshold: 0.1 });
+
+            revealItems.forEach(item => observer.observe(item));
+        }
+
+        document.querySelectorAll('[data-count]').forEach(el => {
+            const target = parseInt(el.dataset.count, 10) || 0;
+
+            if (reduce || target === 0) {
+                el.textContent = target;
+                return;
+            }
+
+            el.textContent = '0';
+            const start = performance.now();
+
+            function tick(now) {
+                const progress = Math.min((now - start) / 900, 1);
+                const eased = 1 - Math.pow(1 - progress, 3);
+                el.textContent = Math.round(target * eased);
+                if (progress < 1) requestAnimationFrame(tick);
+            }
+
+            requestAnimationFrame(tick);
+        });
+
+        const browse = document.getElementById('hmBrowse');
+        const productsSection = document.getElementById('products');
+
+        if (browse && productsSection) {
+            browse.addEventListener('click', event => {
+                event.preventDefault();
+                productsSection.scrollIntoView({ behavior: reduce ? 'auto' : 'smooth' });
+            });
+        }
+
+        const search = document.getElementById('hmSearch');
+        const chips = document.querySelectorAll('.hm-chip');
+        const cards = Array.from(document.querySelectorAll('.hm-product'));
+        const count = document.getElementById('hmCount');
+        const noResults = document.getElementById('hmNoResults');
+        let activeCategory = 'all';
+
+        function applyFilters() {
+            const term = search.value.trim().toLowerCase();
+            let shown = 0;
+
+            cards.forEach(card => {
+                const matchesName = !term || card.dataset.name.includes(term);
+                const matchesCategory = activeCategory === 'all' || card.dataset.category === activeCategory;
+                const visible = matchesName && matchesCategory;
+
+                card.hidden = !visible;
+
+                if (visible) {
+                    shown += 1;
+                    card.classList.add('is-visible');
+                }
+            });
+
+            count.textContent = shown + ' product' + (shown === 1 ? '' : 's');
+            noResults.hidden = shown !== 0;
+        }
+
+        if (search) {
+            search.addEventListener('input', applyFilters);
+        }
+
+        chips.forEach(chip => {
+            chip.addEventListener('click', () => {
+                chips.forEach(item => item.classList.remove('active'));
+                chip.classList.add('active');
+                activeCategory = chip.dataset.category;
+                applyFilters();
+            });
+        });
+    })();
+</script>
 {% endblock %}

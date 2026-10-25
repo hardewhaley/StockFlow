@@ -1,0 +1,241 @@
+{% extends "base.html" %}
+
+{% block title %}My Dashboard | StockFlow{% endblock %}
+
+{% block content %}
+<script>document.documentElement.classList.add('cx-js');</script>
+
+<section class="cx-page">
+
+    <div class="cx-hero">
+        <span class="cx-blob cx-blob-1"></span>
+        <span class="cx-blob cx-blob-2"></span>
+        <span class="cx-blob cx-blob-3"></span>
+
+        <div class="cx-hero-text">
+            <span class="cx-eyebrow">
+                <i class="fa-solid fa-wand-magic-sparkles"></i>
+                MY ACCOUNT
+            </span>
+
+            <h1>{{ greeting }}, {{ first_name }} <span class="cx-wave">👋</span></h1>
+
+            <p>
+                {% if active_order %}
+                    Your order <strong>{{ active_order.order_number }}</strong> is {{ active_order.status }}. Track it below.
+                {% else %}
+                    Ready to find something new today? Fresh products are waiting for you.
+                {% endif %}
+            </p>
+
+            <div class="cx-hero-actions">
+                <a href="{{ url_for('shop') }}" class="cx-btn cx-btn-light">
+                    <i class="fa-solid fa-store"></i>
+                    Shop Now
+                </a>
+                <a href="{{ url_for('cart') }}" class="cx-btn cx-btn-glass">
+                    <i class="fa-solid fa-cart-shopping"></i>
+                    View Cart
+                    {% if cart_count %}<span class="cx-btn-badge">{{ cart_count }}</span>{% endif %}
+                </a>
+            </div>
+        </div>
+    </div>
+
+    <div class="cx-stats">
+
+        <a href="{{ url_for('my_orders') }}" class="cx-stat cx-blue" data-reveal style="--i:0">
+            <span class="cx-stat-icon"><i class="fa-solid fa-receipt"></i></span>
+            <div class="cx-stat-body">
+                <span class="cx-stat-label">My Orders</span>
+                <strong class="cx-stat-value" data-count="{{ total_orders }}">{{ total_orders }}</strong>
+            </div>
+            <span class="cx-stat-link">View all orders <i class="fa-solid fa-arrow-right"></i></span>
+        </a>
+
+        <a href="{{ url_for('my_orders', status='pending') }}" class="cx-stat cx-amber" data-reveal style="--i:1">
+            <span class="cx-stat-icon"><i class="fa-solid fa-clock"></i></span>
+            <div class="cx-stat-body">
+                <span class="cx-stat-label">Pending Orders</span>
+                <strong class="cx-stat-value" data-count="{{ pending_orders }}">{{ pending_orders }}</strong>
+            </div>
+            <span class="cx-stat-link">Track pending <i class="fa-solid fa-arrow-right"></i></span>
+        </a>
+
+        <a href="{{ url_for('my_orders', status='delivered') }}" class="cx-stat cx-green" data-reveal style="--i:2">
+            <span class="cx-stat-icon"><i class="fa-solid fa-circle-check"></i></span>
+            <div class="cx-stat-body">
+                <span class="cx-stat-label">Completed Orders</span>
+                <strong class="cx-stat-value" data-count="{{ completed_orders }}">{{ completed_orders }}</strong>
+            </div>
+            <span class="cx-stat-link">See delivered <i class="fa-solid fa-arrow-right"></i></span>
+        </a>
+
+        <a href="{{ url_for('cart') }}" class="cx-stat cx-violet" data-reveal style="--i:3">
+            <span class="cx-stat-icon"><i class="fa-solid fa-cart-shopping"></i></span>
+            <div class="cx-stat-body">
+                <span class="cx-stat-label">Cart Items</span>
+                <strong class="cx-stat-value" data-count="{{ cart_count }}">{{ cart_count }}</strong>
+            </div>
+            <span class="cx-stat-link">Go to cart <i class="fa-solid fa-arrow-right"></i></span>
+        </a>
+
+    </div>
+
+    {% if active_order %}
+    {% set step = {'pending': 1, 'confirmed': 2}.get(active_order.status, 1) %}
+    <section class="cx-track-card cx-track" data-reveal style="--i:0">
+        <div class="cx-track-head">
+            <div>
+                <h2><i class="fa-solid fa-truck-fast"></i> Track Your Latest Order</h2>
+                <p>{{ active_order.order_number }} · {{ active_order.sale_date|local_time('%d %b %Y, %H:%M') }}</p>
+            </div>
+            <a href="{{ url_for('order_detail', order_id=active_order.id) }}" class="cx-link">
+                View details <i class="fa-solid fa-arrow-right"></i>
+            </a>
+        </div>
+
+        <div class="cx-steps">
+            <div class="cx-steps-line">
+                <span class="cx-steps-fill" style="--fill: {{ (step - 1) * 50 }}%"></span>
+            </div>
+
+            <div class="cx-step {% if step >= 1 %}done{% endif %} {% if step == 1 %}current{% endif %}">
+                <span class="cx-step-dot"><i class="fa-solid fa-receipt"></i></span>
+                <strong>Order Placed</strong>
+            </div>
+
+            <div class="cx-step {% if step >= 2 %}done{% endif %} {% if step == 2 %}current{% endif %}">
+                <span class="cx-step-dot"><i class="fa-solid fa-circle-check"></i></span>
+                <strong>Confirmed</strong>
+            </div>
+
+            <div class="cx-step">
+                <span class="cx-step-dot"><i class="fa-solid fa-truck-fast"></i></span>
+                <strong>Delivered</strong>
+            </div>
+        </div>
+    </section>
+    {% endif %}
+
+    <section class="cx-section" data-reveal style="--i:0">
+        <div class="cx-section-head">
+            <h2><i class="fa-solid fa-receipt"></i> Recent Orders</h2>
+            <a href="{{ url_for('my_orders') }}" class="cx-link">View all <i class="fa-solid fa-arrow-right"></i></a>
+        </div>
+
+        {% if recent_orders %}
+        <div class="cx-orders">
+            {% for order in recent_orders %}
+            <a href="{{ url_for('order_detail', order_id=order.id) }}" class="cx-order" data-reveal style="--i:{{ loop.index0 }}">
+                <span class="cx-order-icon"><i class="fa-solid fa-box-open"></i></span>
+
+                <span class="cx-order-main">
+                    <strong>{{ order.order_number }}</strong>
+                    <small>{{ order.sale_date|local_time('%d %b %Y, %H:%M') }}</small>
+                    <em>{{ order.sale_items|map(attribute='product.name')|join(', ')|truncate(48) }}</em>
+                </span>
+
+                <span class="cx-order-meta">
+                    <span class="cx-order-total">₦{{ "{:,.2f}".format(order.total_amount) }}</span>
+                    <span class="cx-pill cx-pill-{{ order.status }}">{{ order.status|capitalize }}</span>
+                </span>
+
+                <i class="fa-solid fa-chevron-right cx-order-arrow"></i>
+            </a>
+            {% endfor %}
+        </div>
+        {% else %}
+        <div class="cx-empty">
+            <span class="cx-empty-icon"><i class="fa-solid fa-bag-shopping"></i></span>
+            <h3>No orders yet</h3>
+            <p>When you place an order, it will show up here.</p>
+            <a href="{{ url_for('shop') }}" class="cx-btn cx-btn-solid">
+                <i class="fa-solid fa-store"></i>
+                Start Shopping
+            </a>
+        </div>
+        {% endif %}
+    </section>
+
+    {% if featured_products %}
+    <section class="cx-section" data-reveal style="--i:0">
+        <div class="cx-section-head">
+            <h2><i class="fa-solid fa-fire"></i> New Arrivals</h2>
+            <a href="{{ url_for('shop') }}" class="cx-link">See all products <i class="fa-solid fa-arrow-right"></i></a>
+        </div>
+
+        <div class="cx-products">
+            {% for product in featured_products %}
+            <article class="cx-product" data-reveal style="--i:{{ loop.index0 }}">
+                <div class="cx-product-art">
+                    <span class="cx-tag-new">NEW</span>
+                    <i class="fa-solid fa-box-open"></i>
+                </div>
+
+                <div class="cx-product-body">
+                    <h3>{{ product.name }}</h3>
+                    <strong class="cx-product-price">₦{{ "{:,.2f}".format(product.selling_price) }}</strong>
+
+                    {% if product.quantity <= 5 %}
+                        <span class="cx-stock cx-stock-low">Only {{ product.quantity }} left</span>
+                    {% else %}
+                        <span class="cx-stock">In stock</span>
+                    {% endif %}
+
+                    <a href="{{ url_for('product_detail', product_id=product.id) }}" class="cx-product-btn">
+                        View product <i class="fa-solid fa-arrow-right"></i>
+                    </a>
+                </div>
+            </article>
+            {% endfor %}
+        </div>
+    </section>
+    {% endif %}
+
+</section>
+
+<script>
+    (function () {
+        const reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+        const items = document.querySelectorAll('[data-reveal]');
+
+        if (reduce || !('IntersectionObserver' in window)) {
+            items.forEach(item => item.classList.add('is-visible'));
+        } else {
+            const observer = new IntersectionObserver(entries => {
+                entries.forEach(entry => {
+                    if (entry.isIntersecting) {
+                        entry.target.classList.add('is-visible');
+                        observer.unobserve(entry.target);
+                    }
+                });
+            }, { threshold: 0.12 });
+
+            items.forEach(item => observer.observe(item));
+        }
+
+        document.querySelectorAll('[data-count]').forEach(el => {
+            const target = parseInt(el.dataset.count, 10) || 0;
+
+            if (reduce || target === 0) {
+                el.textContent = target;
+                return;
+            }
+
+            el.textContent = '0';
+            const duration = 900;
+            const start = performance.now();
+
+            function tick(now) {
+                const progress = Math.min((now - start) / duration, 1);
+                const eased = 1 - Math.pow(1 - progress, 3);
+                el.textContent = Math.round(target * eased);
+                if (progress < 1) requestAnimationFrame(tick);
+            }
+
+            requestAnimationFrame(tick);
+        });
+    })();
+</script>
+{% endblock %}

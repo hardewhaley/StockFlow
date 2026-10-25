@@ -1,52 +1,241 @@
 {% extends "base.html" %}
+
 {% block title %}Admin Dashboard | StockFlow{% endblock %}
+
 {% block content %}
-<div class="admin-dashboard">
-    <div class="dashboard-header">
+<section class="ad-page">
+
+    <header class="ad-header">
         <div>
             <h1>Admin Dashboard</h1>
-            <p>Welcome, {{ current_user.full_name }}.</p>
+            <p>Welcome, {{ current_user.full_name }}. Here is how StockFlow is doing.</p>
         </div>
-        <a href="{{ url_for('admin_stock_alerts') }}" class="stock-alert-badge">
-            <i class="fa-solid fa-bell"></i>
-            <span>{{ low_stock_count }} Stock Alert{% if low_stock_count != 1 %}s{% endif %}</span>
+
+        <div class="ad-header-badges">
+            {% if pending_orders %}
+            <a href="{{ url_for('sales') }}" class="ad-badge ad-badge-blue">
+                <i class="fa-solid fa-clock"></i>
+                <span>{{ pending_orders }} Pending Order{{ '' if pending_orders == 1 else 's' }}</span>
+            </a>
+            {% endif %}
+
+            <a href="{{ url_for('admin_stock_alerts') }}" class="ad-badge ad-badge-amber">
+                <i class="fa-solid fa-bell"></i>
+                <span>{{ low_stock_count }} Stock Alert{{ '' if low_stock_count == 1 else 's' }}</span>
+            </a>
+        </div>
+    </header>
+
+    <div class="ad-stats">
+
+        <a href="{{ url_for('products') }}" class="ad-stat">
+            <span class="ad-stat-icon ad-ic-blue"><i class="fa-solid fa-box"></i></span>
+            <div class="ad-stat-body">
+                <span class="ad-stat-label">Total Products</span>
+                <strong class="ad-stat-value">{{ total_products }}</strong>
+                <small class="ad-stat-sub">{{ total_units }} unit{{ '' if total_units == 1 else 's' }} in stock</small>
+            </div>
         </a>
+
+        <a href="{{ url_for('customer') }}" class="ad-stat">
+            <span class="ad-stat-icon ad-ic-violet"><i class="fa-solid fa-users"></i></span>
+            <div class="ad-stat-body">
+                <span class="ad-stat-label">Total Customers</span>
+                <strong class="ad-stat-value">{{ total_customers }}</strong>
+                <small class="ad-stat-sub">Registered accounts</small>
+            </div>
+        </a>
+
+        <a href="{{ url_for('staff_list') }}" class="ad-stat">
+            <span class="ad-stat-icon ad-ic-teal"><i class="fa-solid fa-user-tie"></i></span>
+            <div class="ad-stat-body">
+                <span class="ad-stat-label">Total Staff</span>
+                <strong class="ad-stat-value">{{ total_staff }}</strong>
+                <small class="ad-stat-sub">Staff accounts</small>
+            </div>
+        </a>
+
+        <a href="{{ url_for('suppliers') }}" class="ad-stat">
+            <span class="ad-stat-icon ad-ic-orange"><i class="fa-solid fa-truck"></i></span>
+            <div class="ad-stat-body">
+                <span class="ad-stat-label">Total Suppliers</span>
+                <strong class="ad-stat-value">{{ total_suppliers }}</strong>
+                <small class="ad-stat-sub">{{ active_suppliers }} active</small>
+            </div>
+        </a>
+
+        <a href="{{ url_for('sales') }}" class="ad-stat">
+            <span class="ad-stat-icon ad-ic-green"><i class="fa-solid fa-receipt"></i></span>
+            <div class="ad-stat-body">
+                <span class="ad-stat-label">Total Sales</span>
+                <strong class="ad-stat-value">{{ total_sales }}</strong>
+                <small class="ad-stat-sub">₦{{ "{:,.2f}".format(total_revenue) }} revenue</small>
+            </div>
+        </a>
+
+        <a href="{{ url_for('sales') }}" class="ad-stat">
+            <span class="ad-stat-icon ad-ic-indigo"><i class="fa-solid fa-calendar-day"></i></span>
+            <div class="ad-stat-body">
+                <span class="ad-stat-label">Today's Sales</span>
+                <strong class="ad-stat-value">{{ today_sales }}</strong>
+                <small class="ad-stat-sub">
+                    {% if today_sales %}₦{{ "{:,.2f}".format(today_revenue) }} today{% else %}No sales yet today{% endif %}
+                </small>
+            </div>
+        </a>
+
+        <a href="{{ url_for('admin_stock_alerts') }}" class="ad-stat ad-stat-wide ad-stat-warn">
+            <span class="ad-stat-icon ad-ic-amber"><i class="fa-solid fa-triangle-exclamation"></i></span>
+            <div class="ad-stat-body">
+                <span class="ad-stat-label">Low Stock</span>
+                <strong class="ad-stat-value">{{ low_stock_count }}</strong>
+                <small class="ad-stat-sub">
+                    {% if low_stock_count %}{{ out_of_stock_count }} out of stock · needs restocking{% else %}All products have enough stock{% endif %}
+                </small>
+            </div>
+        </a>
+
     </div>
-    <section class="low-stock-section">
-        <div class="low-stock-header">
-            <h2><i class="fa-solid fa-triangle-exclamation"></i> Low-Stock Products</h2>
-            <span class="low-stock-count">{{ low_stock_products|length }} product{{ '' if low_stock_products|length == 1 else 's' }}</span>
+
+    <div class="ad-grid">
+
+        <section class="ad-panel">
+            <div class="ad-panel-head">
+                <h2><i class="fa-solid fa-receipt"></i> Recent Sales</h2>
+                <a href="{{ url_for('sales') }}" class="ad-link">View all</a>
+            </div>
+
+            {% if recent_sales %}
+            <div class="ad-table-wrap">
+                <table class="ad-table">
+                    <thead>
+                        <tr>
+                            <th>Reference</th>
+                            <th>Customer</th>
+                            <th>Total</th>
+                            <th>Status</th>
+                            <th>Action</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for sale in recent_sales %}
+                        <tr>
+                            <td data-label="Reference">
+                                <span class="ad-ref">
+                                    <strong>{{ sale.order_number or 'SAL-%05d'|format(sale.id) }}</strong>
+                                    <small>{{ sale.sale_date|local_time('%d %b, %H:%M') }}</small>
+                                </span>
+                            </td>
+                            <td data-label="Customer">
+                                {{ sale.full_name or (sale.customer.full_name if sale.customer else 'Walk-in customer') }}
+                            </td>
+                            <td data-label="Total" class="ad-amount">₦{{ "{:,.2f}".format(sale.total_amount) }}</td>
+                            <td data-label="Status">
+                                <span class="ad-pill ad-pill-{{ sale.status }}">{{ sale.status|capitalize }}</span>
+                            </td>
+                            <td data-label="Action">
+                                <a href="{{ url_for('sale_detail', sale_id=sale.id) }}" class="ad-btn-view">
+                                    <i class="fa-solid fa-eye"></i> View
+                                </a>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            {% else %}
+            <p class="ad-empty">
+                <i class="fa-solid fa-receipt"></i>
+                No sales yet. Recorded and online sales will appear here.
+            </p>
+            {% endif %}
+        </section>
+
+        <section class="ad-panel">
+            <div class="ad-panel-head">
+                <h2><i class="fa-solid fa-clock-rotate-left"></i> Recent Activities</h2>
+            </div>
+
+            {% if activities %}
+            <ul class="ad-feed">
+                {% for activity in activities %}
+                <li>
+                    <a href="{{ activity.url }}">
+                        <span class="ad-feed-icon ad-tone-{{ activity.tone }}">
+                            <i class="fa-solid {{ activity.icon }}"></i>
+                        </span>
+                        <span class="ad-feed-text">
+                            <strong>{{ activity.title }}</strong>
+                            <small>{{ activity.detail }}</small>
+                        </span>
+                        <time>{{ activity.when|local_time('%d %b, %H:%M') }}</time>
+                    </a>
+                </li>
+                {% endfor %}
+            </ul>
+            {% else %}
+            <p class="ad-empty">
+                <i class="fa-solid fa-clock-rotate-left"></i>
+                No activity yet.
+            </p>
+            {% endif %}
+        </section>
+
+    </div>
+
+    <section class="ad-panel">
+        <div class="ad-panel-head">
+            <h2><i class="fa-solid fa-triangle-exclamation ad-warn-icon"></i> Low-Stock Products</h2>
+            <div class="ad-head-right">
+                <span class="ad-count">{{ low_stock_count }} product{{ '' if low_stock_count == 1 else 's' }}</span>
+                <a href="{{ url_for('admin_stock_alerts') }}" class="ad-link">View all</a>
+            </div>
         </div>
+
         {% if low_stock_products %}
-        <div class="low-stock-table-wrapper">
-            <table class="low-stock-table">
+        <div class="ad-table-wrap">
+            <table class="ad-table">
                 <thead>
                     <tr>
-                        <th>Product Name</th>
+                        <th>Product</th>
                         <th>Quantity Left</th>
                         <th>Status</th>
+                        <th>Action</th>
                     </tr>
                 </thead>
                 <tbody>
                     {% for product in low_stock_products %}
                     <tr>
-                        <td>{{ product.name }}</td>
-                        <td>{{ product.quantity }}</td>
-                        <td>
+                        <td data-label="Product" class="ad-name">{{ product.name }}</td>
+                        <td data-label="Quantity Left">{{ product.quantity }}</td>
+                        <td data-label="Status">
                             {% if product.quantity == 0 %}
-                                <span class="stock-status out">Out of Stock</span>
+                                <span class="ad-pill ad-pill-out">Out of Stock</span>
                             {% else %}
-                                <span class="stock-status low">Low Stock</span>
+                                <span class="ad-pill ad-pill-low">Low Stock</span>
                             {% endif %}
+                        </td>
+                        <td data-label="Action">
+                            <a href="{{ url_for('add_stock', product_id=product.id) }}" class="ad-btn-view">
+                                <i class="fa-solid fa-plus"></i> Restock
+                            </a>
                         </td>
                     </tr>
                     {% endfor %}
                 </tbody>
             </table>
         </div>
+
+        {% if low_stock_count > low_stock_products|length %}
+        <p class="ad-more">Showing {{ low_stock_products|length }} of {{ low_stock_count }}. <a href="{{ url_for('admin_stock_alerts') }}">See the rest</a></p>
+        {% endif %}
         {% else %}
-        <p class="no-low-stock">All products have sufficient stock.</p>
+        <p class="ad-empty ad-empty-good">
+            <i class="fa-solid fa-circle-check"></i>
+            All products have sufficient stock.
+        </p>
         {% endif %}
     </section>
-</div>
+
+</section>
 {% endblock %}

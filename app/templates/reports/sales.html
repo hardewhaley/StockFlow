@@ -1,0 +1,269 @@
+{% extends "base.html" %}
+
+{% block title %}Sales Report | StockFlow{% endblock %}
+
+{% block content %}
+<section class="ad-page">
+
+    <header class="ad-header">
+        <div>
+            <h1>Sales Report</h1>
+            <p>
+                {{ range_label }}
+                {% if source != 'all' %} · {{ 'In-store' if source == 'store' else 'Online' }} sales only{% endif %}
+            </p>
+        </div>
+
+        <div class="ad-header-badges no-print">
+            <a href="{{ url_for('reports') }}" class="ad-badge ad-badge-blue">
+                <i class="fa-solid fa-arrow-left"></i>
+                <span>All Reports</span>
+            </a>
+            <button type="button" class="ad-badge ad-badge-amber" onclick="window.print()">
+                <i class="fa-solid fa-print"></i>
+                <span>Print</span>
+            </button>
+        </div>
+    </header>
+
+    <div class="rp-filters no-print">
+        <div class="rp-filter-row">
+            <nav class="rp-chips" aria-label="Report period">
+                {% for key, label in periods %}
+                <a href="{{ url_for('sales_report', period=key, source=source) }}"
+                   class="rp-chip {% if not is_custom and period == key %}active{% endif %}">{{ label }}</a>
+                {% endfor %}
+            </nav>
+
+            <form method="get" action="{{ url_for('sales_report') }}" class="rp-range">
+                <input type="hidden" name="source" value="{{ source }}">
+                <label>
+                    From
+                    <input type="date" name="from" value="{{ start_date.isoformat() }}" max="{{ today.isoformat() }}" required>
+                </label>
+                <label>
+                    To
+                    <input type="date" name="to" value="{{ end_date.isoformat() }}" max="{{ today.isoformat() }}" required>
+                </label>
+                <button type="submit" class="rp-apply">Apply</button>
+            </form>
+        </div>
+
+        <div class="rp-filter-row">
+            <span class="rp-filter-label">Source</span>
+            <nav class="rp-chips" aria-label="Sales source">
+                {% for key, label in sources %}
+                <a href="{{ url_for('sales_report', source=key, **range_args) }}"
+                   class="rp-chip {% if source == key %}active{% endif %}">{{ label }}</a>
+                {% endfor %}
+            </nav>
+        </div>
+    </div>
+
+    <div class="ad-stats">
+
+        <div class="ad-stat">
+            <span class="ad-stat-icon ad-ic-green"><i class="fa-solid fa-naira-sign"></i></span>
+            <div class="ad-stat-body">
+                <span class="ad-stat-label">Total Sales</span>
+                <strong class="ad-stat-value rp-money">₦{{ "{:,.2f}".format(total_amount) }}</strong>
+                <small class="ad-stat-sub">In the selected period</small>
+            </div>
+        </div>
+
+        <div class="ad-stat">
+            <span class="ad-stat-icon ad-ic-indigo"><i class="fa-solid fa-calendar-day"></i></span>
+            <div class="ad-stat-body">
+                <span class="ad-stat-label">Today's Sales</span>
+                <strong class="ad-stat-value rp-money">₦{{ "{:,.2f}".format(today_amount) }}</strong>
+                <small class="ad-stat-sub">{{ today_count }} transaction{{ '' if today_count == 1 else 's' }} today</small>
+            </div>
+        </div>
+
+        <div class="ad-stat">
+            <span class="ad-stat-icon ad-ic-blue"><i class="fa-solid fa-receipt"></i></span>
+            <div class="ad-stat-body">
+                <span class="ad-stat-label">Transactions</span>
+                <strong class="ad-stat-value">{{ total_count }}</strong>
+                <small class="ad-stat-sub">{{ cancelled_count }} cancelled not counted</small>
+            </div>
+        </div>
+
+        <div class="ad-stat">
+            <span class="ad-stat-icon ad-ic-violet"><i class="fa-solid fa-chart-line"></i></span>
+            <div class="ad-stat-body">
+                <span class="ad-stat-label">Average Sale</span>
+                <strong class="ad-stat-value rp-money">₦{{ "{:,.2f}".format(average_sale) }}</strong>
+                <small class="ad-stat-sub">Per transaction</small>
+            </div>
+        </div>
+
+    </div>
+
+    <div class="rp-stack">
+
+        <section class="ad-panel">
+            <div class="ad-panel-head">
+                <h2><i class="fa-solid fa-chart-column"></i> Sales by Date</h2>
+                {% if best_day %}
+                <span class="ad-count">
+                    Best day: {{ best_day.date.strftime('%d %b') }} · ₦{{ "{:,.2f}".format(best_day.amount) }}
+                </span>
+                {% endif %}
+            </div>
+
+            {% if best_day %}
+            <div class="rp-chart-wrap">
+                <div class="rp-chart" style="--n: {{ chart_days|length }}">
+                    {% for day in chart_days %}
+                    <div class="rp-bar-col"
+                         title="{{ day.date.strftime('%a, %d %b %Y') }}: ₦{{ '{:,.2f}'.format(day.amount) }} from {{ day.count }} sale{{ '' if day.count == 1 else 's' }}">
+                        <div class="rp-bar-track">
+                            <span class="rp-bar {% if day.height == 0 %}rp-bar-zero{% endif %}"
+                                  style="--h: {{ day.height }}%; --i: {{ loop.index0 }}"></span>
+                        </div>
+                        <span class="rp-bar-label">
+                            {{ day.date.strftime('%d') }}
+                            <small>{% if loop.first or day.date.day == 1 %}{{ day.date.strftime('%b') }}{% endif %}</small>
+                        </span>
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+
+            <div class="ad-table-wrap rp-table-gap">
+                <table class="ad-table">
+                    <thead>
+                        <tr>
+                            <th>Date</th>
+                            <th>Transactions</th>
+                            <th>In-store</th>
+                            <th>Online</th>
+                            <th>Sales</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for row in day_rows %}
+                        <tr>
+                            <td data-label="Date" class="ad-name">{{ row.date.strftime('%a, %d %b %Y') }}</td>
+                            <td data-label="Transactions">{{ row.count }}</td>
+                            <td data-label="In-store">{{ row.store }}</td>
+                            <td data-label="Online">{{ row.online }}</td>
+                            <td data-label="Sales">
+                                <div class="rp-cell-bar">
+                                    <strong>₦{{ "{:,.2f}".format(row.amount) }}</strong>
+                                    <span class="rp-mini"><span style="--w: {{ row.pct }}%"></span></span>
+                                </div>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+
+            {% if rows_truncated %}
+            <p class="ad-more">Showing the 60 most recent days with sales. Narrow the dates to see older days.</p>
+            {% endif %}
+            {% else %}
+            <div class="ad-empty">
+                <i class="fa-solid fa-chart-column"></i>
+                <span>No sales in this period.</span>
+            </div>
+            {% endif %}
+        </section>
+
+        <section class="ad-panel">
+            <div class="ad-panel-head">
+                <h2><i class="fa-solid fa-clock-rotate-left"></i> Sales History</h2>
+                <span class="ad-count">{{ pagination.total }} record{{ '' if pagination.total == 1 else 's' }}</span>
+            </div>
+
+            {% if pagination.items %}
+            <div class="ad-table-wrap">
+                <table class="ad-table">
+                    <thead>
+                        <tr>
+                            <th>Reference</th>
+                            <th>Customer</th>
+                            <th>Source</th>
+                            <th>Items</th>
+                            <th>Total</th>
+                            <th>Payment</th>
+                            <th>Status</th>
+                            <th class="no-print">Action</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for sale in pagination.items %}
+                        {% set online = (sale.order_number or '').startswith('ORD-') %}
+                        <tr class="{% if sale.status == 'cancelled' %}rp-row-cancelled{% endif %}">
+                            <td data-label="Reference">
+                                <span class="ad-ref">
+                                    <strong>{{ sale.order_number or 'SAL-%05d'|format(sale.id) }}</strong>
+                                    <small>{{ sale.sale_date|local_time('%d %b %Y, %H:%M') }}</small>
+                                </span>
+                            </td>
+                            <td data-label="Customer" class="ad-name">
+                                {{ sale.full_name or (sale.customer.full_name if sale.customer else 'Walk-in customer') }}
+                            </td>
+                            <td data-label="Source">
+                                <span class="rp-tag {% if online %}rp-tag-online{% else %}rp-tag-store{% endif %}">
+                                    {{ 'Online' if online else 'In-store' }}
+                                </span>
+                            </td>
+                            <td data-label="Items">{{ sale.sale_items|sum(attribute='quantity') }}</td>
+                            <td data-label="Total" class="ad-amount">₦{{ "{:,.2f}".format(sale.total_amount) }}</td>
+                            <td data-label="Payment">
+                                <span class="rp-pill rp-pill-{{ sale.payment_status }}">{{ sale.payment_status|capitalize }}</span>
+                            </td>
+                            <td data-label="Status">
+                                <span class="rp-pill rp-pill-{{ sale.status }}">{{ sale.status|capitalize }}</span>
+                            </td>
+                            <td data-label="Action" class="no-print">
+                                <a href="{{ url_for('sale_detail', sale_id=sale.id) }}" class="ad-btn-view">
+                                    <i class="fa-solid fa-eye"></i> View
+                                </a>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+
+            <p class="ad-more">
+                Showing {{ pagination.first }} to {{ pagination.last }} of {{ pagination.total }}
+            </p>
+
+            {% if pagination.pages > 1 %}
+            <nav class="rp-pager no-print" aria-label="Sales history pages">
+                {% if pagination.has_prev %}
+                <a href="{{ url_for('sales_report', page=pagination.prev_num, **filter_args) }}" class="rp-page-btn">
+                    <i class="fa-solid fa-arrow-left"></i> Previous
+                </a>
+                {% else %}
+                <span class="rp-page-btn is-disabled"><i class="fa-solid fa-arrow-left"></i> Previous</span>
+                {% endif %}
+
+                <span class="rp-page-info">Page {{ pagination.page }} of {{ pagination.pages }}</span>
+
+                {% if pagination.has_next %}
+                <a href="{{ url_for('sales_report', page=pagination.next_num, **filter_args) }}" class="rp-page-btn">
+                    Next <i class="fa-solid fa-arrow-right"></i>
+                </a>
+                {% else %}
+                <span class="rp-page-btn is-disabled">Next <i class="fa-solid fa-arrow-right"></i></span>
+                {% endif %}
+            </nav>
+            {% endif %}
+            {% else %}
+            <div class="ad-empty">
+                <i class="fa-solid fa-receipt"></i>
+                <span>No sales found for this period.</span>
+            </div>
+            {% endif %}
+        </section>
+
+    </div>
+
+</section>
+{% endblock %}
