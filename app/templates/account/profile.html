@@ -1,0 +1,401 @@
+{% extends "base.html" %}
+
+{% block title %}My Profile | StockFlow{% endblock %}
+
+{% block content %}
+{% set secret_label = 'Staff Code' if is_staff else 'Password' %}
+
+<section class="pf-page">
+
+    <header class="pf-header">
+        <div>
+            <h1>My Profile</h1>
+            <p>Manage your personal information and keep your account secure.</p>
+        </div>
+
+        <a href="{{ dashboard_url }}" class="pf-back">
+            <i class="fa-solid fa-arrow-left"></i>
+            Back to Dashboard
+        </a>
+    </header>
+
+    <div class="pf-layout">
+
+        <aside class="pf-summary">
+            <div class="pf-cover"></div>
+            {% set photo = avatar_url(current_user) %}
+            <div class="pf-avatar-wrap">
+                <div class="pf-avatar" id="pfAvatar">
+                    {% if photo %}
+                        <img src="{{ photo }}" alt="{{ current_user.full_name }}">
+                    {% else %}
+                        {{ initials }}
+                    {% endif %}
+                </div>
+                <button type="button" class="pf-avatar-edit" id="pfPick" aria-label="Change profile photo">
+                    <i class="fa-solid fa-camera"></i>
+                </button>
+            </div>
+
+            <h2>{{ current_user.full_name }}</h2>
+            <p class="pf-email">{{ current_user.email }}</p>
+            <span class="pf-role pf-role-{{ role_key }}">{{ role_label }}</span>
+                <form method="POST" action="{{ url_for('upload_photo') }}" enctype="multipart/form-data"
+                  id="pfPhotoForm" class="pf-photo-form">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <input type="file" name="photo" id="pfFile" accept="image/*" hidden>
+
+                <p class="pf-photo-hint" id="pfPhotoHint">Tap the camera to choose a photo from your phone.</p>
+
+                <div class="pf-photo-bar" id="pfPhotoBar" hidden>
+                    <button type="submit" class="pf-save pf-save-sm" id="pfPhotoSave">
+                        <i class="fa-solid fa-cloud-arrow-up"></i> Save Photo
+                    </button>
+                    <button type="button" class="pf-ghost" id="pfPhotoCancel">Cancel</button>
+                </div>
+            </form>
+
+            {% if photo %}
+            <form method="POST" action="{{ url_for('remove_photo') }}" class="pf-remove-form"
+                  onsubmit="return confirm('Remove your profile photo?');">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <button type="submit" class="pf-remove">
+                    <i class="fa-regular fa-trash-can"></i> Remove photo
+                </button>
+            </form>
+            {% endif %}
+
+            <ul class="pf-facts">
+                {% if is_customer %}
+                <li><span>Phone</span><strong>{{ current_user.phone }}</strong></li>
+                <li>
+                    <span>Member Since</span>
+                    <strong>{{ current_user.created_at|local_time('%d %b %Y') }}</strong>
+                </li>
+                <li><span>Total Orders</span><strong>{{ order_count }}</strong></li>
+                {% elif is_staff %}
+                <li><span>Staff ID</span><strong>{{ staff_id }}</strong></li>
+                <li><span>Access</span><strong>Staff tools</strong></li>
+                {% else %}
+                <li><span>Access</span><strong>Full access</strong></li>
+                {% endif %}
+            </ul>
+
+            <div class="pf-quick">
+                <a href="{{ dashboard_url }}"><i class="fa-solid fa-gauge"></i> Dashboard</a>
+                {% if is_customer %}
+                <a href="{{ url_for('my_orders') }}"><i class="fa-solid fa-receipt"></i> My Orders</a>
+                {% endif %}
+            </div>
+        </aside>
+
+        <div class="pf-main">
+
+            <section class="pf-panel">
+                <h2>
+                    <i class="fa-solid fa-user-pen"></i>
+                    Personal Information
+                </h2>
+                <p class="pf-panel-desc">Update the details linked to your account.</p>
+
+                <form method="POST" action="{{ url_for('profile') }}">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+                    <div class="pf-grid">
+                        <div class="pf-field pf-full">
+                            <label for="full_name">Full Name</label>
+                            <div class="pf-input">
+                                <i class="fa-regular fa-user pf-lead"></i>
+                                <input type="text" id="full_name" name="full_name"
+                                       value="{{ request.form.get('full_name', current_user.full_name) }}"
+                                       maxlength="100" autocomplete="name" required>
+                            </div>
+                        </div>
+
+                        <div class="pf-field {% if not is_customer %}pf-full{% endif %}">
+                            <label for="email">Email Address</label>
+                            <div class="pf-input">
+                                <i class="fa-regular fa-envelope pf-lead"></i>
+                                <input type="email" id="email" name="email"
+                                       value="{{ request.form.get('email', current_user.email) }}"
+                                       maxlength="120" autocomplete="email" required>
+                            </div>
+                        </div>
+
+                        {% if is_customer %}
+                        <div class="pf-field">
+                            <label for="phone">Phone Number</label>
+                            <div class="pf-input">
+                                <i class="fa-solid fa-phone pf-lead"></i>
+                                <input type="tel" id="phone" name="phone"
+                                       value="{{ request.form.get('phone', current_user.phone) }}"
+                                       maxlength="25" autocomplete="tel" required>
+                            </div>
+                        </div>
+                        {% endif %}
+                    </div>
+
+                    <div class="pf-actions">
+                        <button type="submit" class="pf-save">
+                            <i class="fa-solid fa-floppy-disk"></i>
+                            Save Changes
+                        </button>
+                    </div>
+                </form>
+            </section>
+
+            <section class="pf-panel" id="security">
+                <h2>
+                    <i class="fa-solid fa-lock"></i>
+                    Change {{ secret_label }}
+                </h2>
+                <p class="pf-panel-desc">
+                    Use at least 8 characters.
+                    {% if is_staff %}This is the code you use to log in.{% endif %}
+                </p>
+
+                <form method="POST" action="{{ url_for('change_password') }}" id="pfPasswordForm">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+                    <div class="pf-grid">
+                        <div class="pf-field pf-full">
+                            <label for="current_password">Current {{ secret_label }}</label>
+                            <div class="pf-input pf-input-pw">
+                                <i class="fa-solid fa-key pf-lead"></i>
+                                <input type="password" id="current_password" name="current_password"
+                                       autocomplete="current-password" required>
+                                <button type="button" class="pf-eye" data-toggle="current_password" aria-label="Show or hide">
+                                    <i class="fa-regular fa-eye"></i>
+                                </button>
+                            </div>
+                        </div>
+
+                        <div class="pf-field">
+                            <label for="new_password">New {{ secret_label }}</label>
+                            <div class="pf-input pf-input-pw">
+                                <i class="fa-solid fa-lock pf-lead"></i>
+                                <input type="password" id="new_password" name="new_password"
+                                       minlength="8" maxlength="128" autocomplete="new-password" required>
+                                <button type="button" class="pf-eye" data-toggle="new_password" aria-label="Show or hide">
+                                    <i class="fa-regular fa-eye"></i>
+                                </button>
+                            </div>
+                            <div class="pf-strength" id="pfStrength" data-level="0">
+                                <span></span><span></span><span></span><span></span>
+                            </div>
+                            <small class="pf-hint" id="pfStrengthLabel"></small>
+                        </div>
+
+                        <div class="pf-field">
+                            <label for="confirm_password">Confirm New {{ secret_label }}</label>
+                            <div class="pf-input pf-input-pw">
+                                <i class="fa-solid fa-lock pf-lead"></i>
+                                <input type="password" id="confirm_password" name="confirm_password"
+                                       minlength="8" maxlength="128" autocomplete="new-password" required>
+                                <button type="button" class="pf-eye" data-toggle="confirm_password" aria-label="Show or hide">
+                                    <i class="fa-regular fa-eye"></i>
+                                </button>
+                            </div>
+                            <small class="pf-hint" id="pfMatch"></small>
+                        </div>
+                    </div>
+
+                    <div class="pf-actions">
+                        <button type="submit" class="pf-save" id="pfPasswordSubmit" disabled>
+                            <i class="fa-solid fa-shield-halved"></i>
+                            Update {{ secret_label }}
+                        </button>
+                    </div>
+                </form>
+            </section>
+
+        </div>
+    </div>
+
+</section>
+
+<script>
+    (function () {
+        document.querySelectorAll('[data-toggle]').forEach(function (button) {
+            const input = document.getElementById(button.dataset.toggle);
+
+            button.addEventListener('click', function () {
+                const show = input.type === 'password';
+                input.type = show ? 'text' : 'password';
+                button.querySelector('i').className = show ? 'fa-regular fa-eye-slash' : 'fa-regular fa-eye';
+            });
+        });
+
+        const currentInput = document.getElementById('current_password');
+        const newInput = document.getElementById('new_password');
+        const confirmInput = document.getElementById('confirm_password');
+        const meter = document.getElementById('pfStrength');
+        const strengthLabel = document.getElementById('pfStrengthLabel');
+        const matchLabel = document.getElementById('pfMatch');
+        const submit = document.getElementById('pfPasswordSubmit');
+        const labels = ['', 'Weak', 'Fair', 'Good', 'Strong'];
+
+        function strength(value) {
+            if (!value) return 0;
+            if (value.length < 8) return -1;
+
+            let score = 1;
+            if (/[a-z]/.test(value) && /[A-Z]/.test(value)) score += 1;
+            if (/\d/.test(value)) score += 1;
+            if (/[^A-Za-z0-9]/.test(value)) score += 1;
+            return score;
+        }
+
+        function update() {
+            const value = newInput.value;
+            const score = strength(value);
+
+            meter.dataset.level = score === -1 ? 1 : score;
+            strengthLabel.textContent = score === -1 ? 'Too short. Use at least 8 characters.' : labels[score];
+            strengthLabel.className = 'pf-hint' + (score >= 3 ? ' ok' : '');
+
+            const confirmValue = confirmInput.value;
+
+            if (!confirmValue) {
+                matchLabel.textContent = '';
+                matchLabel.className = 'pf-hint';
+            } else if (confirmValue === value) {
+                matchLabel.textContent = 'Both entries match.';
+                matchLabel.className = 'pf-hint ok';
+            } else {
+                matchLabel.textContent = 'These do not match yet.';
+                matchLabel.className = 'pf-hint bad';
+            }
+
+            submit.disabled = !(currentInput.value && value.length >= 8 && value === confirmValue);
+        }
+
+        [currentInput, newInput, confirmInput].forEach(function (input) {
+            input.addEventListener('input', update);
+        });
+
+        update();
+    })();
+</script>
+<script>
+    (function () {
+        const pick = document.getElementById('pfPick');
+        const file = document.getElementById('pfFile');
+        const avatar = document.getElementById('pfAvatar');
+        const bar = document.getElementById('pfPhotoBar');
+        const hint = document.getElementById('pfPhotoHint');
+        const cancel = document.getElementById('pfPhotoCancel');
+        const form = document.getElementById('pfPhotoForm');
+        const save = document.getElementById('pfPhotoSave');
+        const original = avatar.innerHTML;
+        const defaultHint = hint.textContent;
+        let previewUrl = null;
+
+        function reset() {
+            file.value = '';
+            avatar.innerHTML = original;
+            bar.hidden = true;
+            hint.textContent = defaultHint;
+            hint.classList.remove('bad');
+
+            if (previewUrl) {
+                URL.revokeObjectURL(previewUrl);
+                previewUrl = null;
+            }
+        }
+
+        function fail(message) {
+            reset();
+            hint.textContent = message;
+            hint.classList.add('bad');
+        }
+
+        function shrink(source) {
+            return new Promise(function (resolve) {
+                const url = URL.createObjectURL(source);
+                const img = new Image();
+
+                img.onload = function () {
+                    const side = Math.min(img.naturalWidth, img.naturalHeight);
+                    const target = Math.min(600, side);
+                    const canvas = document.createElement('canvas');
+                    canvas.width = target;
+                    canvas.height = target;
+
+                    canvas.getContext('2d').drawImage(
+                        img,
+                        (img.naturalWidth - side) / 2,
+                        (img.naturalHeight - side) / 2,
+                        side,
+                        side,
+                        0,
+                        0,
+                        target,
+                        target
+                    );
+
+                    URL.revokeObjectURL(url);
+                    canvas.toBlob(function (blob) { resolve(blob); }, 'image/jpeg', 0.88);
+                };
+
+                img.onerror = function () {
+                    URL.revokeObjectURL(url);
+                    resolve(null);
+                };
+
+                img.src = url;
+            });
+        }
+
+        pick.addEventListener('click', function () { file.click(); });
+        cancel.addEventListener('click', reset);
+
+        file.addEventListener('change', async function () {
+            const chosen = file.files[0];
+
+            if (!chosen) return;
+
+            if (chosen.type && chosen.type.indexOf('image/') !== 0) {
+                fail('Please choose an image file.');
+                return;
+            }
+
+            const blob = await shrink(chosen);
+
+            if (!blob) {
+                fail("We couldn't read that image. Please choose a JPG or PNG photo.");
+                return;
+            }
+
+            try {
+                const transfer = new DataTransfer();
+                transfer.items.add(new File([blob], 'profile.jpg', { type: 'image/jpeg' }));
+                file.files = transfer.files;
+            } catch (error) {
+                if (chosen.size > 9 * 1024 * 1024) {
+                    fail('That photo is too large. Please choose one under 10 MB.');
+                    return;
+                }
+            }
+
+            if (previewUrl) URL.revokeObjectURL(previewUrl);
+            previewUrl = URL.createObjectURL(blob);
+
+            avatar.innerHTML = '';
+            const preview = document.createElement('img');
+            preview.src = previewUrl;
+            preview.alt = 'Preview';
+            avatar.appendChild(preview);
+
+            bar.hidden = false;
+            hint.textContent = 'Looking good? Save it to update your photo.';
+            hint.classList.remove('bad');
+        });
+
+        form.addEventListener('submit', function () {
+            save.disabled = true;
+            save.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Saving...';
+        });
+    })();
+</script>
+{% endblock %}

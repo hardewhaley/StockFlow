@@ -23,10 +23,12 @@
     <link rel="stylesheet" href="{{ url_for('static', filename='css/home.css') }}">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/customer_dashboard.css') }}">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/reports.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/profile.css') }}">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.7.2/css/all.min.css">
 </head>
 <body>
     {% set show_sidebar = current_user.is_authenticated and current_user.role in ['admin', 'staff'] %}
+    {% set photo = avatar_url(current_user) if current_user.is_authenticated else None %}
 
     {% set cart_count = namespace(total=0) %}
     {% for quantity in session.get('cart', {}).values() %}
@@ -49,28 +51,36 @@
 
             <nav class="sidebar-nav">
                 {% if current_user.role == 'admin' %}
-                    <a href="{{ url_for('admin_dashboard') }}" class="nav-link {% if request.endpoint == 'admin_dashboard' %}active{% endif %}">
+                    <a href="{{ url_for('admin_dashboard') }}"
+                       class="nav-link {% if request.endpoint in ['admin_dashboard', 'admin_stock_alerts'] %}active{% endif %}">
                         <i class="fa-solid fa-house"></i><span>Dashboard</span>
                     </a>
-                    <a href="{{ url_for('products') }}" class="nav-link">
+                    <a href="{{ url_for('products') }}"
+                       class="nav-link {% if request.endpoint in ['products', 'add_product', 'edit_product'] %}active{% endif %}">
                         <i class="fa-solid fa-box"></i><span>Products</span>
                     </a>
-                    <a href="{{ url_for('categories') }}" class="nav-link">
+                    <a href="{{ url_for('categories') }}"
+                       class="nav-link {% if request.endpoint in ['categories', 'add_category', 'edit_category'] %}active{% endif %}">
                         <i class="fa-solid fa-layer-group"></i><span>Categories</span>
                     </a>
-                    <a href="{{ url_for('customer') }}" class="nav-link">
+                    <a href="{{ url_for('customer') }}"
+                       class="nav-link {% if request.endpoint in ['customer', 'customer_detail', 'customer_edit'] %}active{% endif %}">
                         <i class="fa-solid fa-users"></i><span>Customers</span>
                     </a>
-                    <a href="{{ url_for('suppliers') }}" class="nav-link">
+                    <a href="{{ url_for('suppliers') }}"
+                       class="nav-link {% if request.endpoint in ['suppliers', 'add_supplier', 'edit_supplier'] %}active{% endif %}">
                         <i class="fa-solid fa-truck"></i><span>Suppliers</span>
                     </a>
-                    <a href="{{ url_for('sales') }}" class="nav-link">
+                    <a href="{{ url_for('sales') }}"
+                       class="nav-link {% if request.endpoint in ['sales', 'new_sale', 'sale_detail'] %}active{% endif %}">
                         <i class="fa-solid fa-cart-shopping"></i><span>Sales</span>
                     </a>
-                    <a href="{{ url_for('stock') }}" class="nav-link">
+                    <a href="{{ url_for('stock') }}"
+                       class="nav-link {% if request.endpoint in ['stock', 'add_stock', 'stock_movements'] %}active{% endif %}">
                         <i class="fa-solid fa-boxes-stacked"></i><span>Stock</span>
                     </a>
-                    <a href="{{ url_for('reports') }}" class="nav-link">
+                    <a href="{{ url_for('reports') }}"
+                       class="nav-link {% if request.endpoint in ['reports', 'sales_report'] %}active{% endif %}">
                         <i class="fa-solid fa-chart-line"></i><span>Reports</span>
                     </a>
                     <a href="{{ url_for('staff_list') }}"
@@ -78,16 +88,20 @@
                         <i class="fa-solid fa-user-plus"></i><span>Staff</span>
                     </a>
                 {% else %}
-                    <a href="{{ url_for('staff_dashboard') }}" class="nav-link {% if request.endpoint == 'staff_dashboard' %}active{% endif %}">
+                    <a href="{{ url_for('staff_dashboard') }}"
+                       class="nav-link {% if request.endpoint == 'staff_dashboard' %}active{% endif %}">
                         <i class="fa-solid fa-house"></i><span>Dashboard</span>
                     </a>
-                    <a href="{{ url_for('products') }}" class="nav-link">
+                    <a href="{{ url_for('products') }}"
+                       class="nav-link {% if request.endpoint in ['products', 'add_product', 'edit_product'] %}active{% endif %}">
                         <i class="fa-solid fa-box"></i><span>Products</span>
                     </a>
-                    <a href="{{ url_for('sales') }}" class="nav-link">
+                    <a href="{{ url_for('sales') }}"
+                       class="nav-link {% if request.endpoint in ['sales', 'new_sale', 'sale_detail'] %}active{% endif %}">
                         <i class="fa-solid fa-cart-shopping"></i><span>Sales</span>
                     </a>
-                    <a href="{{ url_for('stock') }}" class="nav-link">
+                    <a href="{{ url_for('stock') }}"
+                       class="nav-link {% if request.endpoint in ['stock', 'add_stock', 'stock_movements'] %}active{% endif %}">
                         <i class="fa-solid fa-boxes-stacked"></i><span>Stock</span>
                     </a>
                 {% endif %}
@@ -108,8 +122,14 @@
                 <div class="navbar-title"><h3>StockFlow</h3></div>
 
                 <div class="navbar-user">
-                    <i class="fa-solid fa-circle-user"></i>
-                    <span>{{ current_user.full_name }}</span>
+                    <a href="{{ url_for('profile') }}" class="navbar-profile" title="My profile">
+                        {% if photo %}
+                            <img src="{{ photo }}" alt="" class="navbar-avatar">
+                        {% else %}
+                            <i class="fa-solid fa-circle-user"></i>
+                        {% endif %}
+                        <span>{{ current_user.full_name }}</span>
+                    </a>
                     <a href="{{ url_for(logout_endpoint) }}" class="logout-link">
                         <i class="fa-solid fa-right-from-bracket"></i>
                         <span>Logout</span>
@@ -132,15 +152,18 @@
                             <a href="{{ url_for('customer_dashboard') }}"
                                class="cn-link {% if request.endpoint == 'customer_dashboard' %}active{% endif %}">Dashboard</a>
                             {% endif %}
-                            <a href="{{ url_for('my_orders') }}" class="cn-link {% if request.endpoint in ['my_orders', 'order_detail'] %}active{% endif %}">My Orders</a>
+                            <a href="{{ url_for('my_orders') }}"
+                               class="cn-link {% if request.endpoint in ['my_orders', 'order_detail'] %}active{% endif %}">My Orders</a>
                         </nav>
 
                         <div class="cn-auth">
                             {% if current_user.is_authenticated %}
-                                <div class="cn-user">
-                                    <span class="cn-avatar">{{ (current_user.full_name or '?')[:1]|upper }}</span>
+                                <a href="{{ url_for('profile') }}" class="cn-user" title="My profile">
+                                    <span class="cn-avatar">
+                                        {% if photo %}<img src="{{ photo }}" alt="">{% else %}{{ (current_user.full_name or '?')[:1]|upper }}{% endif %}
+                                    </span>
                                     <span class="cn-user-name">{{ current_user.full_name }}</span>
-                                </div>
+                                </a>
                                 <a href="{{ url_for(logout_endpoint) }}" class="cn-btn cn-btn-ghost">
                                     <i class="fa-solid fa-right-from-bracket"></i>
                                     Logout

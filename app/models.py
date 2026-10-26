@@ -15,6 +15,7 @@ class User(UserMixin, db.Model):
     email = db.Column(db.String(120), unique=True, nullable=False)
     password = db.Column(db.String(255), nullable=False)
     role = db.Column(db.String(20), nullable=False, default='staff')
+    profile_image = db.Column(db.String(120), nullable=True)
 
     sales = db.relationship('Sale', back_populates='user', lazy=True)
     stock_movements = db.relationship('StockMovement', back_populates='user', lazy=True)
@@ -30,6 +31,7 @@ class Customer(UserMixin, db.Model):
     phone = db.Column(db.String(20), unique=True, nullable=False)
     password = db.Column(db.String(255), nullable=False)
     created_at = db.Column(db.DateTime, default=utc_now)
+    profile_image = db.Column(db.String(120), nullable=True)
     role = 'customer'
 
     sales = db.relationship('Sale', back_populates='customer', lazy=True)

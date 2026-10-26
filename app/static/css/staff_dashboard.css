@@ -793,3 +793,13 @@
         grid-template-columns: 1fr;
     }
 }
+
+a.staff-account-badge {
+    transition: all 0.2s ease;
+}
+
+a.staff-account-badge:hover {
+    background: #eff6ff;
+    border-color: #93c5fd;
+    transform: translateY(-1px);
+}

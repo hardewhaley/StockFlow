@@ -2,10 +2,14 @@ import re
 import secrets
 import string
 import time
+import os
+
+from PIL import Image, ImageOps, UnidentifiedImageError
 from datetime import datetime, timedelta, timezone
 from decimal import Decimal, InvalidOperation
+from collections import Counter
 
-from flask import render_template, redirect, flash, url_for, session, request, abort
+from flask import render_template, redirect, flash, url_for, session, request, abort, jsonify
 from flask_login import login_user, logout_user, login_required, current_user
 from flask_mail import Message
 from sqlalchemy import func, or_, update
@@ -340,6 +344,37 @@ def parse_report_date(value):
     except (ValueError, TypeError):
         return None
 
+
+STORE_INFO = {
+    'address': 'No 3, Aladejubelo Street, Akobo Ojurin, Ibadan, Oyo State',
+    'phone': '+234 815 433 5354',
+    'email': 'adedokunmuhammed2022@gmail.com',
+    'hours': 'Mon to Sat, 8:00 AM to 6:00 PM'
+}
+
+CATEGORY_ICONS = [
+    (('phone', 'mobile'), 'fa-mobile-screen-button'),
+    (('gadget', 'electronic', 'tech'), 'fa-microchip'),
+    (('computer', 'laptop'), 'fa-laptop'),
+    (('audio', 'sound', 'head', 'speaker'), 'fa-headphones'),
+    (('watch', 'accessor'), 'fa-clock'),
+    (('fashion', 'cloth', 'wear', 'shoe', 'bag'), 'fa-shirt'),
+    (('food', 'drink', 'grocer', 'snack'), 'fa-utensils'),
+    (('home', 'kitchen', 'furniture'), 'fa-couch'),
+    (('beauty', 'cosmetic', 'health'), 'fa-spa'),
+    (('book', 'stationery', 'office'), 'fa-book')
+]
+
+
+def category_icon(name):
+    label = (name or '').lower()
+
+    for keywords, icon in CATEGORY_ICONS:
+        if any(word in label for word in keywords):
+            return icon
+
+    return 'fa-tag'
+
 @app.route('/')
 def home():
     products = (
@@ -356,12 +391,112 @@ def home():
             for product in sorted(products, key=lambda item: item.id, reverse=True)[:4]
         ]
 
+    category_counts = Counter(product.category.name for product in products)
+    category_cards = [
+        {'name': name, 'count': count, 'icon': category_icon(name)}
+        for name, count in sorted(category_counts.items())
+    ]
+
+    products_by_id = {product.id: product for product in products}
+
+    sold_rows = (
+        db.session.query(SaleItem.product_id, func.sum(SaleItem.quantity))
+        .join(Sale, SaleItem.sale_id == Sale.id)
+        .filter(Sale.status != 'cancelled')
+        .group_by(SaleItem.product_id)
+        .order_by(func.sum(SaleItem.quantity).desc())
+        .limit(4)
+        .all()
+    )
+
+    best_sellers = [
+        {'product': products_by_id[product_id], 'units': int(units)}
+        for product_id, units in sold_rows
+        if product_id in products_by_id and units
+    ]
+
     return render_template(
         'customer/dashboard.html',
         products=products,
-        newest_ids=newest_ids
+        newest_ids=newest_ids,
+        category_cards=category_cards,
+        best_sellers=best_sellers,
+        store=STORE_INFO
     )
 
+CONTACT_WINDOW_SECONDS = 600
+CONTACT_MAX_MESSAGES = 3
+
+
+@app.route('/contact', methods=['POST'])
+def contact_message():
+    if request.form.get('website'):
+        return jsonify(ok=True, message="Thank you! Your message has been sent.")
+
+    name = ' '.join(request.form.get('name', '').split())
+    email = request.form.get('email', '').strip().lower()
+    message_text = request.form.get('message', '').strip()
+
+    if len(name) < 2 or len(name) > 100:
+        return jsonify(ok=False, message="Enter your name (2 to 100 characters)."), 400
+
+    if not EMAIL_PATTERN.match(email) or len(email) > 120:
+        return jsonify(ok=False, message="Enter a valid email address."), 400
+
+    if len(message_text) < 10 or len(message_text) > 2000:
+        return jsonify(ok=False, message="Your message must be 10 to 2000 characters long."), 400
+
+    now = time.time()
+    recent = [
+        stamp for stamp in session.get('contact_times', [])
+        if now - stamp < CONTACT_WINDOW_SECONDS
+    ]
+
+    if len(recent) >= CONTACT_MAX_MESSAGES:
+        return jsonify(
+            ok=False,
+            message="You have sent several messages recently. Please try again in a few minutes."
+        ), 429
+
+    recipient = STORE_INFO.get('email')
+
+    if not recipient:
+        return jsonify(ok=False, message="Messaging is not available right now."), 503
+
+    account_line = (
+        f"Logged-in customer ID: {current_user.id}"
+        if current_user.is_authenticated and has_role('customer')
+        else "Sent by a visitor who was not logged in"
+    )
+
+    mail_message = Message(
+        subject=f"New message from {name} via StockFlow",
+        sender=app.config['MAIL_USERNAME'],
+        recipients=[recipient],
+        reply_to=email
+    )
+    mail_message.body = (
+        f"You have a new message from your StockFlow website.\n\n"
+        f"Name: {name}\n"
+        f"Email: {email}\n"
+        f"{account_line}\n\n"
+        f"Message:\n{message_text}\n\n"
+        f"Press Reply to answer {name} directly."
+    )
+
+    try:
+        mail.send(mail_message)
+    except Exception:
+        app.logger.exception("Contact message failed")
+        return jsonify(
+            ok=False,
+            message="We couldn't send your message. Please try again or call us."
+        ), 500
+
+    recent.append(now)
+    session['contact_times'] = recent
+
+    return jsonify(ok=True, message="Thank you! Your message has been sent. We will reply to your email.")
 
 @app.route('/shop')
 def shop():
@@ -2431,6 +2566,224 @@ def sales_report():
         pagination=pagination
     )
 
+
+Image.MAX_IMAGE_PIXELS = 40000000
+AVATAR_SIZE = 400
+
+
+def avatar_folder():
+    folder = os.path.join(app.static_folder, 'uploads', 'avatars')
+    os.makedirs(folder, exist_ok=True)
+    return folder
+
+
+def delete_avatar_file(filename):
+    if not filename:
+        return
+
+    try:
+        os.remove(os.path.join(avatar_folder(), os.path.basename(filename)))
+    except OSError:
+        pass
+
+
+@app.template_global()
+def avatar_url(user):
+    filename = getattr(user, 'profile_image', None)
+
+    if not filename:
+        return None
+
+    return url_for('static', filename=f'uploads/avatars/{filename}')
+
+
+@app.errorhandler(413)
+def file_too_large(error):
+    flash("That image is too large. Please choose one under 10 MB.", "error")
+    return redirect(url_for('profile'))
+
+
+@app.route('/profile/photo', methods=['POST'])
+@login_required
+def upload_photo():
+    user = current_user._get_current_object()
+    upload = request.files.get('photo')
+
+    if upload is None or not upload.filename:
+        flash("Please choose a photo to upload.", "error")
+        return redirect(url_for('profile'))
+
+    try:
+        image = Image.open(upload.stream)
+        image = ImageOps.exif_transpose(image)
+        image = image.convert('RGB')
+    except (UnidentifiedImageError, OSError, ValueError, Image.DecompressionBombError):
+        flash("That file is not a supported image. Please choose a JPG or PNG photo.", "error")
+        return redirect(url_for('profile'))
+
+    image = ImageOps.fit(image, (AVATAR_SIZE, AVATAR_SIZE), Image.Resampling.LANCZOS)
+
+    prefix = 'customer' if has_role('customer') else 'user'
+    filename = f"{prefix}-{user.id}-{secrets.token_hex(8)}.jpg"
+    old_filename = user.profile_image
+
+    try:
+        image.save(os.path.join(avatar_folder(), filename), 'JPEG', quality=86, optimize=True)
+        user.profile_image = filename
+        db.session.commit()
+    except Exception:
+        db.session.rollback()
+        delete_avatar_file(filename)
+        app.logger.exception("Failed to save profile photo")
+        flash("Unable to save your photo. Please try again.", "error")
+        return redirect(url_for('profile'))
+
+    delete_avatar_file(old_filename)
+    flash("Your profile photo has been updated.", "success")
+    return redirect(url_for('profile'))
+
+
+@app.route('/profile/photo/remove', methods=['POST'])
+@login_required
+def remove_photo():
+    user = current_user._get_current_object()
+    old_filename = user.profile_image
+
+    if not old_filename:
+        flash("You don't have a profile photo to remove.", "error")
+        return redirect(url_for('profile'))
+
+    try:
+        user.profile_image = None
+        db.session.commit()
+    except Exception:
+        db.session.rollback()
+        app.logger.exception("Failed to remove profile photo")
+        flash("Unable to remove your photo. Please try again.", "error")
+        return redirect(url_for('profile'))
+
+    delete_avatar_file(old_filename)
+    flash("Your profile photo has been removed.", "success")
+    return redirect(url_for('profile'))
+
+@app.route('/profile', methods=['GET', 'POST'])
+@login_required
+def profile():
+    user = current_user._get_current_object()
+    is_customer = has_role('customer')
+    is_staff = has_role('staff')
+    model = Customer if is_customer else User
+
+    if request.method == 'POST':
+        full_name = request.form.get('full_name', '').strip()
+        email = request.form.get('email', '').strip().lower()
+        phone = re.sub(r'[\s\-().]', '', request.form.get('phone', '').strip()) if is_customer else None
+        errors = []
+
+        if len(full_name) < 2 or len(full_name) > 100:
+            errors.append("Enter your full name (2 to 100 characters).")
+
+        if not EMAIL_PATTERN.match(email) or len(email) > 120:
+            errors.append("Enter a valid email address.")
+        elif model.query.filter(func.lower(model.email) == email, model.id != user.id).first():
+            errors.append("That email address is already in use.")
+
+        if is_customer:
+            if not re.fullmatch(r'\+?\d{10,15}', phone) or len(phone) > 20:
+                errors.append("Enter a valid phone number (10 to 15 digits).")
+            elif Customer.query.filter(Customer.phone == phone, Customer.id != user.id).first():
+                errors.append("That phone number is already in use.")
+
+        if errors:
+            for error in errors:
+                flash(error, "error")
+        else:
+            user.full_name = full_name
+            user.email = email
+
+            if is_customer:
+                user.phone = phone
+
+            try:
+                db.session.commit()
+                flash("Your profile has been updated.", "success")
+                return redirect(url_for('profile'))
+            except IntegrityError:
+                db.session.rollback()
+                flash("That email or phone number is already in use.", "error")
+            except Exception:
+                db.session.rollback()
+                app.logger.exception("Failed to update profile")
+                flash("Unable to update your profile. Please try again.", "error")
+
+    name_parts = (user.full_name or '').split()
+    initials = ''.join(part[0] for part in name_parts[:2]).upper() or '?'
+
+    if is_customer:
+        role_key, role_label = 'customer', 'Customer'
+        dashboard_url = url_for('customer_dashboard')
+        order_count = Sale.query.filter(
+            Sale.customer_id == user.id,
+            Sale.order_number.like('ORD-%')
+        ).count()
+    else:
+        role_key = 'staff' if is_staff else 'admin'
+        role_label = 'Staff' if is_staff else 'Administrator'
+        dashboard_url = dashboard_for(user)
+        order_count = 0
+
+    return render_template(
+        'account/profile.html',
+        is_customer=is_customer,
+        is_staff=is_staff,
+        role_key=role_key,
+        role_label=role_label,
+        initials=initials,
+        dashboard_url=dashboard_url,
+        order_count=order_count,
+        staff_id=f"STF-{user.id:04d}" if is_staff else None
+    )
+
+
+@app.route('/profile/password', methods=['POST'])
+@login_required
+def change_password():
+    user = current_user._get_current_object()
+    label = 'staff code' if has_role('staff') else 'password'
+
+    current_password = request.form.get('current_password', '')
+    new_password = request.form.get('new_password', '')
+    confirm_password = request.form.get('confirm_password', '')
+    errors = []
+
+    if not check_password_hash(user.password, current_password):
+        errors.append(f"Your current {label} is incorrect.")
+
+    if len(new_password) < 8:
+        errors.append(f"Your new {label} must be at least 8 characters.")
+    elif len(new_password) > 128:
+        errors.append(f"Your new {label} is too long.")
+    elif new_password == current_password:
+        errors.append(f"Your new {label} must be different from the current one.")
+
+    if new_password != confirm_password:
+        errors.append(f"The new {label} and its confirmation do not match.")
+
+    if errors:
+        for error in errors:
+            flash(error, "error")
+        return redirect(url_for('profile') + '#security')
+
+    try:
+        user.password = generate_password_hash(new_password)
+        db.session.commit()
+        flash(f"Your {label} has been changed.", "success")
+    except Exception:
+        db.session.rollback()
+        app.logger.exception("Failed to change password")
+        flash("Unable to change your password. Please try again.", "error")
+
+    return redirect(url_for('profile') + '#security')
 
 @app.route('/logout')
 @login_required
