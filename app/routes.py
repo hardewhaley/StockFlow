@@ -1,17 +1,16 @@
+import os
 import re
 import secrets
 import string
 import time
-import os
-
-from PIL import Image, ImageOps, UnidentifiedImageError
+from collections import Counter
 from datetime import datetime, timedelta, timezone
 from decimal import Decimal, InvalidOperation
-from collections import Counter
 
 from flask import render_template, redirect, flash, url_for, session, request, abort, jsonify
 from flask_login import login_user, logout_user, login_required, current_user
 from flask_mail import Message
+from PIL import Image, ImageOps, UnidentifiedImageError
 from sqlalchemy import func, or_, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import joinedload, selectinload
@@ -31,6 +30,12 @@ REASON_MAX_LENGTH = 255
 EMAIL_PATTERN = re.compile(r'^[^@\s]+@[^@\s]+\.[^@\s]+$')
 
 LOW_STOCK_LEVEL = 5
+
+CONTACT_WINDOW_SECONDS = 600
+CONTACT_MAX_MESSAGES = 3
+
+Image.MAX_IMAGE_PIXELS = 40000000
+AVATAR_SIZE = 400
 
 PAYMENT_METHODS = [
     {
@@ -75,6 +80,43 @@ ORDER_TABS = [
 
 ORDER_STATUSES = [key for key, label in ORDER_TABS if key != 'all']
 
+REPORT_PERIODS = [
+    ('today', 'Today'),
+    ('7d', 'Last 7 Days'),
+    ('30d', 'Last 30 Days'),
+    ('month', 'This Month'),
+    ('all', 'All Time'),
+]
+
+REPORT_SOURCES = [
+    ('all', 'All Sales'),
+    ('store', 'In-store'),
+    ('online', 'Online'),
+]
+
+REPORT_PERIOD_KEYS = {key for key, label in REPORT_PERIODS}
+REPORT_SOURCE_KEYS = {key for key, label in REPORT_SOURCES}
+
+STORE_INFO = {
+    'address': 'No 3, Aladejubelo Street, Akobo Ojurin, Ibadan, Oyo State',
+    'phone': '+234 815 433 5354',
+    'email': 'adedokunmuhammed2022@gmail.com',
+    'hours': 'Mon to Sat, 8:00 AM to 6:00 PM'
+}
+
+CATEGORY_ICONS = [
+    (('phone', 'mobile'), 'fa-mobile-screen-button'),
+    (('gadget', 'electronic', 'tech'), 'fa-microchip'),
+    (('computer', 'laptop'), 'fa-laptop'),
+    (('audio', 'sound', 'head', 'speaker'), 'fa-headphones'),
+    (('watch', 'accessor'), 'fa-clock'),
+    (('fashion', 'cloth', 'wear', 'shoe', 'bag'), 'fa-shirt'),
+    (('food', 'drink', 'grocer', 'snack'), 'fa-utensils'),
+    (('home', 'kitchen', 'furniture'), 'fa-couch'),
+    (('beauty', 'cosmetic', 'health'), 'fa-spa'),
+    (('book', 'stationery', 'office'), 'fa-book')
+]
+
 
 class SaleError(Exception):
     pass
@@ -87,6 +129,16 @@ def local_time(value, fmt='%d %b %Y, %H:%M'):
     if value.tzinfo is None:
         value = value.replace(tzinfo=timezone.utc)
     return value.astimezone(LAGOS).strftime(fmt)
+
+
+@app.template_global()
+def avatar_url(user):
+    filename = getattr(user, 'profile_image', None)
+
+    if not filename:
+        return None
+
+    return url_for('static', filename=f'uploads/avatars/{filename}')
 
 
 def has_role(*roles):
@@ -148,6 +200,16 @@ def clean_phone(value):
     return re.sub(r'[\s\-()]', '', value)
 
 
+def category_icon(name):
+    label = (name or '').lower()
+
+    for keywords, icon in CATEGORY_ICONS:
+        if any(word in label for word in keywords):
+            return icon
+
+    return 'fa-tag'
+
+
 def get_cart_items():
     saved_cart = session.get('cart', {})
     cart_items = []
@@ -195,6 +257,39 @@ def get_cart_items():
     return cart_items, total, adjusted
 
 
+def add_product_to_cart(product_id, quantity):
+    product = db.session.get(Product, product_id)
+
+    if product is None:
+        return False, "Product not found."
+
+    if product.quantity <= 0:
+        return False, "This product is currently out of stock."
+
+    if quantity <= 0:
+        return False, "Please enter a valid quantity."
+
+    saved_cart = session.get('cart', {})
+    key = str(product.id)
+    current_quantity = saved_cart.get(key, 0)
+
+    if current_quantity + quantity > product.quantity:
+        return False, f"Only {product.quantity} unit(s) are currently available."
+
+    saved_cart[key] = current_quantity + quantity
+    session['cart'] = saved_cart
+    return True, f"{product.name} added to your cart!"
+
+
+def safe_next_url():
+    target = request.args.get('next') or request.form.get('next') or ''
+
+    if target.startswith('/') and not target.startswith('//') and '\\' not in target:
+        return target
+
+    return None
+
+
 def get_customer_order(order_id):
     sale = db.session.get(Sale, order_id)
 
@@ -224,6 +319,7 @@ def sale_form_products():
         }
         for product in product_list
     ]
+
 
 def sales_totals(*conditions):
     count, amount = (
@@ -309,23 +405,6 @@ def build_activities(limit=8):
     activities.sort(key=lambda activity: as_utc(activity['when']), reverse=True)
     return activities[:limit]
 
-REPORT_PERIODS = [
-    ('today', 'Today'),
-    ('7d', 'Last 7 Days'),
-    ('30d', 'Last 30 Days'),
-    ('month', 'This Month'),
-    ('all', 'All Time'),
-]
-
-REPORT_SOURCES = [
-    ('all', 'All Sales'),
-    ('store', 'In-store'),
-    ('online', 'Online'),
-]
-
-REPORT_PERIOD_KEYS = {key for key, label in REPORT_PERIODS}
-REPORT_SOURCE_KEYS = {key for key, label in REPORT_SOURCES}
-
 
 def to_local_date(value):
     if value.tzinfo is None:
@@ -345,35 +424,77 @@ def parse_report_date(value):
         return None
 
 
-STORE_INFO = {
-    'address': 'No 3, Aladejubelo Street, Akobo Ojurin, Ibadan, Oyo State',
-    'phone': '+234 815 433 5354',
-    'email': 'adedokunmuhammed2022@gmail.com',
-    'hours': 'Mon to Sat, 8:00 AM to 6:00 PM'
-}
+def resolve_report_period(args, first_moment=None):
+    period = args.get('period', '30d')
 
-CATEGORY_ICONS = [
-    (('phone', 'mobile'), 'fa-mobile-screen-button'),
-    (('gadget', 'electronic', 'tech'), 'fa-microchip'),
-    (('computer', 'laptop'), 'fa-laptop'),
-    (('audio', 'sound', 'head', 'speaker'), 'fa-headphones'),
-    (('watch', 'accessor'), 'fa-clock'),
-    (('fashion', 'cloth', 'wear', 'shoe', 'bag'), 'fa-shirt'),
-    (('food', 'drink', 'grocer', 'snack'), 'fa-utensils'),
-    (('home', 'kitchen', 'furniture'), 'fa-couch'),
-    (('beauty', 'cosmetic', 'health'), 'fa-spa'),
-    (('book', 'stationery', 'office'), 'fa-book')
-]
+    if period not in REPORT_PERIOD_KEYS:
+        period = '30d'
+
+    today = datetime.now(LAGOS).date()
+    custom_from = parse_report_date(args.get('from', '').strip())
+    custom_to = parse_report_date(args.get('to', '').strip())
+    is_custom = bool(custom_from or custom_to)
+
+    if is_custom:
+        start_date = custom_from or custom_to
+        end_date = custom_to or custom_from
+
+        if end_date < start_date:
+            start_date, end_date = end_date, start_date
+
+        range_args = {'from': start_date.isoformat(), 'to': end_date.isoformat()}
+    else:
+        if period == 'today':
+            start_date = today
+        elif period == '7d':
+            start_date = today - timedelta(days=6)
+        elif period == 'month':
+            start_date = today.replace(day=1)
+        elif period == 'all':
+            start_date = to_local_date(first_moment) if first_moment else today
+        else:
+            start_date = today - timedelta(days=29)
+
+        end_date = today
+        range_args = {'period': period}
+
+    if start_date == end_date:
+        range_label = start_date.strftime('%d %b %Y')
+    else:
+        range_label = f"{start_date.strftime('%d %b %Y')} to {end_date.strftime('%d %b %Y')}"
+
+    return {
+        'today': today,
+        'period': period,
+        'is_custom': is_custom,
+        'start_date': start_date,
+        'end_date': end_date,
+        'range_args': range_args,
+        'range_label': range_label
+    }
 
 
-def category_icon(name):
-    label = (name or '').lower()
+def avatar_folder():
+    folder = os.path.join(app.static_folder, 'uploads', 'avatars')
+    os.makedirs(folder, exist_ok=True)
+    return folder
 
-    for keywords, icon in CATEGORY_ICONS:
-        if any(word in label for word in keywords):
-            return icon
 
-    return 'fa-tag'
+def delete_avatar_file(filename):
+    if not filename:
+        return
+
+    try:
+        os.remove(os.path.join(avatar_folder(), os.path.basename(filename)))
+    except OSError:
+        pass
+
+
+@app.errorhandler(413)
+def file_too_large(error):
+    flash("That image is too large. Please choose one under 10 MB.", "error")
+    return redirect(url_for('profile'))
+
 
 @app.route('/')
 def home():
@@ -423,9 +544,6 @@ def home():
         best_sellers=best_sellers,
         store=STORE_INFO
     )
-
-CONTACT_WINDOW_SECONDS = 600
-CONTACT_MAX_MESSAGES = 3
 
 
 @app.route('/contact', methods=['POST'])
@@ -498,6 +616,7 @@ def contact_message():
 
     return jsonify(ok=True, message="Thank you! Your message has been sent. We will reply to your email.")
 
+
 @app.route('/shop')
 def shop():
     products = Product.query.order_by(Product.name.asc()).all()
@@ -517,42 +636,35 @@ def product_detail(product_id):
 
 @app.route('/cart/add/<int:product_id>', methods=['POST'])
 def add_to_cart(product_id):
-    if not has_role('customer'):
-        flash("Please log in with a customer account to shop.", "error")
-        return redirect(url_for('shop'))
-
-    product = db.session.get(Product, product_id)
-
-    if product is None:
+    if db.session.get(Product, product_id) is None:
         flash("Product not found.", "error")
         return redirect(url_for('shop'))
-
-    if product.quantity <= 0:
-        flash("This product is currently out of stock.", "error")
-        return redirect(url_for('product_detail', product_id=product.id))
 
     try:
         quantity = int(request.form.get('quantity', 1))
     except (ValueError, TypeError):
         quantity = 0
 
-    if quantity <= 0:
-        flash("Please enter a valid quantity.", "error")
-        return redirect(url_for('product_detail', product_id=product.id))
+    if not current_user.is_authenticated:
+        session['pending_cart'] = {
+            'product_id': product_id,
+            'quantity': quantity if quantity > 0 else 1
+        }
+        flash("Please log in to add items to your cart.", "info")
+        return redirect(url_for('customer_login'))
 
-    saved_cart = session.get('cart', {})
-    product_key = str(product.id)
-    current_quantity = saved_cart.get(product_key, 0)
+    if not has_role('customer'):
+        flash("Only customer accounts can shop. Please log in with a customer account.", "error")
+        return redirect(url_for('shop'))
 
-    if current_quantity + quantity > product.quantity:
-        flash(f"Only {product.quantity} unit(s) are currently available.", "error")
-        return redirect(url_for('product_detail', product_id=product.id))
+    added, message = add_product_to_cart(product_id, quantity)
 
-    saved_cart[product_key] = current_quantity + quantity
-    session['cart'] = saved_cart
+    if added:
+        flash(message, "success")
+        return redirect(url_for('cart'))
 
-    flash(f"{product.name} added to your cart!", "success")
-    return redirect(url_for('cart'))
+    flash(message, "error")
+    return redirect(url_for('product_detail', product_id=product_id))
 
 
 @app.route('/cart')
@@ -1182,7 +1294,20 @@ def customer_login():
         if customer and check_password_hash(customer.password, password):
             login_user(customer)
             flash("Welcome to StockFlow!", "success")
-            return redirect(url_for('home'))
+
+            pending = session.pop('pending_cart', None)
+
+            if pending:
+                added, message = add_product_to_cart(
+                    pending.get('product_id'),
+                    pending.get('quantity', 1)
+                )
+                flash(message, "success" if added else "error")
+
+                if added:
+                    return redirect(url_for('cart'))
+
+            return redirect(safe_next_url() or url_for('home'))
 
         flash("Invalid email or password.", "error")
 
@@ -1249,7 +1374,6 @@ def staff_login():
     return render_template('staff_login.html', form=form)
 
 
-
 @app.route('/staff/dashboard')
 @login_required
 def staff_dashboard():
@@ -1305,7 +1429,6 @@ def staff_dashboard():
         recent_sales=recent_sales,
         pending_orders=pending_orders
     )
-
 
 
 @app.route('/admin_dashboard')
@@ -1375,7 +1498,7 @@ def admin_stock_alerts():
 
     low_stock_products = (
         Product.query
-        .filter(Product.quantity <= 5)
+        .filter(Product.quantity <= LOW_STOCK_LEVEL)
         .order_by(Product.quantity.asc())
         .all()
     )
@@ -2275,6 +2398,7 @@ def sale_detail(sale_id):
         payment_label=SALE_PAYMENT_LABELS.get(sale.payment_method, sale.payment_method or 'N/A')
     )
 
+
 @app.route('/sales/<int:sale_id>/action', methods=['POST'])
 @login_required
 def sale_action(sale_id):
@@ -2398,6 +2522,8 @@ def reports():
         total_amount=total_amount,
         today_count=today_count,
         today_amount=today_amount,
+        product_count=Product.query.count(),
+        total_units=db.session.query(func.coalesce(func.sum(Product.quantity), 0)).scalar(),
         movement_count=StockMovement.query.count(),
         low_stock_count=Product.query.filter(Product.quantity <= LOW_STOCK_LEVEL).count()
     )
@@ -2410,48 +2536,18 @@ def sales_report():
         flash("You are not authorized to view reports.", "error")
         return redirect(dashboard_for(current_user))
 
-    period = request.args.get('period', '30d')
     source = request.args.get('source', 'all')
-    raw_from = request.args.get('from', '').strip()
-    raw_to = request.args.get('to', '').strip()
     page = request.args.get('page', 1, type=int)
-
-    if period not in REPORT_PERIOD_KEYS:
-        period = '30d'
 
     if source not in REPORT_SOURCE_KEYS:
         source = 'all'
 
-    today = datetime.now(LAGOS).date()
-    custom_from = parse_report_date(raw_from)
-    custom_to = parse_report_date(raw_to)
-    is_custom = bool(custom_from or custom_to)
+    first_sale = db.session.query(func.min(Sale.sale_date)).scalar()
+    span = resolve_report_period(request.args, first_sale)
 
-    if is_custom:
-        start_date = custom_from or custom_to
-        end_date = custom_to or custom_from
-        if end_date < start_date:
-            start_date, end_date = end_date, start_date
-        range_args = {'from': start_date.isoformat(), 'to': end_date.isoformat()}
-    else:
-        if period == 'today':
-            start_date = today
-        elif period == '7d':
-            start_date = today - timedelta(days=6)
-        elif period == 'month':
-            start_date = today.replace(day=1)
-        elif period == 'all':
-            first_sale = db.session.query(func.min(Sale.sale_date)).scalar()
-            start_date = to_local_date(first_sale) if first_sale else today
-        else:
-            start_date = today - timedelta(days=29)
-        end_date = today
-        range_args = {'period': period}
-
-    if start_date == end_date:
-        range_label = start_date.strftime('%d %b %Y')
-    else:
-        range_label = f"{start_date.strftime('%d %b %Y')} to {end_date.strftime('%d %b %Y')}"
+    today = span['today']
+    start_date = span['start_date']
+    end_date = span['end_date']
 
     source_condition = None
     if source == 'store':
@@ -2542,17 +2638,10 @@ def sales_report():
 
     return render_template(
         'reports/sales.html',
-        today=today,
-        start_date=start_date,
-        end_date=end_date,
-        range_label=range_label,
-        is_custom=is_custom,
-        period=period,
         source=source,
         periods=REPORT_PERIODS,
         sources=REPORT_SOURCES,
-        range_args=range_args,
-        filter_args={**range_args, 'source': source},
+        filter_args={**span['range_args'], 'source': source},
         total_count=total_count,
         total_amount=total_amount,
         today_count=today_count,
@@ -2563,108 +2652,99 @@ def sales_report():
         day_rows=day_rows[:60],
         rows_truncated=len(day_rows) > 60,
         best_day=best_day,
-        pagination=pagination
+        pagination=pagination,
+        **span
     )
 
 
-Image.MAX_IMAGE_PIXELS = 40000000
-AVATAR_SIZE = 400
-
-
-def avatar_folder():
-    folder = os.path.join(app.static_folder, 'uploads', 'avatars')
-    os.makedirs(folder, exist_ok=True)
-    return folder
-
-
-def delete_avatar_file(filename):
-    if not filename:
-        return
-
-    try:
-        os.remove(os.path.join(avatar_folder(), os.path.basename(filename)))
-    except OSError:
-        pass
-
-
-@app.template_global()
-def avatar_url(user):
-    filename = getattr(user, 'profile_image', None)
-
-    if not filename:
-        return None
-
-    return url_for('static', filename=f'uploads/avatars/{filename}')
-
-
-@app.errorhandler(413)
-def file_too_large(error):
-    flash("That image is too large. Please choose one under 10 MB.", "error")
-    return redirect(url_for('profile'))
-
-
-@app.route('/profile/photo', methods=['POST'])
+@app.route('/reports/inventory')
 @login_required
-def upload_photo():
-    user = current_user._get_current_object()
-    upload = request.files.get('photo')
+def inventory_report():
+    if not has_role('admin'):
+        flash("You are not authorized to view reports.", "error")
+        return redirect(dashboard_for(current_user))
 
-    if upload is None or not upload.filename:
-        flash("Please choose a photo to upload.", "error")
-        return redirect(url_for('profile'))
+    history = request.args.get('history', 'in')
 
-    try:
-        image = Image.open(upload.stream)
-        image = ImageOps.exif_transpose(image)
-        image = image.convert('RGB')
-    except (UnidentifiedImageError, OSError, ValueError, Image.DecompressionBombError):
-        flash("That file is not a supported image. Please choose a JPG or PNG photo.", "error")
-        return redirect(url_for('profile'))
+    if history not in ('in', 'out'):
+        history = 'in'
 
-    image = ImageOps.fit(image, (AVATAR_SIZE, AVATAR_SIZE), Image.Resampling.LANCZOS)
+    page = request.args.get('page', 1, type=int)
 
-    prefix = 'customer' if has_role('customer') else 'user'
-    filename = f"{prefix}-{user.id}-{secrets.token_hex(8)}.jpg"
-    old_filename = user.profile_image
+    first_move = db.session.query(func.min(StockMovement.movement_date)).scalar()
+    span = resolve_report_period(request.args, first_move)
 
-    try:
-        image.save(os.path.join(avatar_folder(), filename), 'JPEG', quality=86, optimize=True)
-        user.profile_image = filename
-        db.session.commit()
-    except Exception:
-        db.session.rollback()
-        delete_avatar_file(filename)
-        app.logger.exception("Failed to save profile photo")
-        flash("Unable to save your photo. Please try again.", "error")
-        return redirect(url_for('profile'))
+    conditions = [
+        StockMovement.movement_date >= local_day_start_utc(span['start_date']),
+        StockMovement.movement_date < local_day_start_utc(span['end_date'] + timedelta(days=1))
+    ]
 
-    delete_avatar_file(old_filename)
-    flash("Your profile photo has been updated.", "success")
-    return redirect(url_for('profile'))
+    products = (
+        Product.query
+        .options(joinedload(Product.category), joinedload(Product.supplier))
+        .order_by(Product.name.asc())
+        .all()
+    )
 
+    total_units = sum(product.quantity for product in products)
+    stock_value = sum(
+        (Decimal(product.quantity) * (product.purchase_price or Decimal('0')) for product in products),
+        Decimal('0.00')
+    )
+    missing_cost = sum(1 for product in products if product.purchase_price is None)
 
-@app.route('/profile/photo/remove', methods=['POST'])
-@login_required
-def remove_photo():
-    user = current_user._get_current_object()
-    old_filename = user.profile_image
+    low_products = sorted(
+        [product for product in products if product.quantity <= LOW_STOCK_LEVEL],
+        key=lambda product: (product.quantity, product.name.lower())
+    )
+    out_count = sum(1 for product in products if product.quantity <= 0)
+    low_only = len(low_products) - out_count
+    in_count = len(products) - len(low_products)
 
-    if not old_filename:
-        flash("You don't have a profile photo to remove.", "error")
-        return redirect(url_for('profile'))
+    totals = {}
+    for movement_type, count, units in (
+        db.session.query(
+            StockMovement.movement_type,
+            func.count(StockMovement.id),
+            func.coalesce(func.sum(StockMovement.quantity), 0)
+        )
+        .filter(*conditions)
+        .group_by(StockMovement.movement_type)
+        .all()
+    ):
+        totals[movement_type] = {'count': count, 'units': int(units)}
 
-    try:
-        user.profile_image = None
-        db.session.commit()
-    except Exception:
-        db.session.rollback()
-        app.logger.exception("Failed to remove profile photo")
-        flash("Unable to remove your photo. Please try again.", "error")
-        return redirect(url_for('profile'))
+    in_totals = totals.get('IN', {'count': 0, 'units': 0})
+    out_totals = totals.get('OUT', {'count': 0, 'units': 0})
 
-    delete_avatar_file(old_filename)
-    flash("Your profile photo has been removed.", "success")
-    return redirect(url_for('profile'))
+    pagination = (
+        StockMovement.query
+        .options(joinedload(StockMovement.product), joinedload(StockMovement.user))
+        .filter(StockMovement.movement_type == ('IN' if history == 'in' else 'OUT'), *conditions)
+        .order_by(StockMovement.movement_date.desc(), StockMovement.id.desc())
+        .paginate(page=page, per_page=15, error_out=False)
+    )
+
+    return render_template(
+        'reports/inventory.html',
+        products=products,
+        total_units=total_units,
+        stock_value=stock_value,
+        missing_cost=missing_cost,
+        low_products=low_products,
+        low_level=LOW_STOCK_LEVEL,
+        out_count=out_count,
+        low_only=low_only,
+        in_count=in_count,
+        history=history,
+        in_totals=in_totals,
+        out_totals=out_totals,
+        net_units=in_totals['units'] - out_totals['units'],
+        pagination=pagination,
+        periods=REPORT_PERIODS,
+        **span
+    )
+
 
 @app.route('/profile', methods=['GET', 'POST'])
 @login_required
@@ -2784,6 +2864,71 @@ def change_password():
         flash("Unable to change your password. Please try again.", "error")
 
     return redirect(url_for('profile') + '#security')
+
+
+@app.route('/profile/photo', methods=['POST'])
+@login_required
+def upload_photo():
+    user = current_user._get_current_object()
+    upload = request.files.get('photo')
+
+    if upload is None or not upload.filename:
+        flash("Please choose a photo to upload.", "error")
+        return redirect(url_for('profile'))
+
+    try:
+        image = Image.open(upload.stream)
+        image = ImageOps.exif_transpose(image)
+        image = image.convert('RGB')
+    except (UnidentifiedImageError, OSError, ValueError, Image.DecompressionBombError):
+        flash("That file is not a supported image. Please choose a JPG or PNG photo.", "error")
+        return redirect(url_for('profile'))
+
+    image = ImageOps.fit(image, (AVATAR_SIZE, AVATAR_SIZE), Image.Resampling.LANCZOS)
+
+    prefix = 'customer' if has_role('customer') else 'user'
+    filename = f"{prefix}-{user.id}-{secrets.token_hex(8)}.jpg"
+    old_filename = user.profile_image
+
+    try:
+        image.save(os.path.join(avatar_folder(), filename), 'JPEG', quality=86, optimize=True)
+        user.profile_image = filename
+        db.session.commit()
+    except Exception:
+        db.session.rollback()
+        delete_avatar_file(filename)
+        app.logger.exception("Failed to save profile photo")
+        flash("Unable to save your photo. Please try again.", "error")
+        return redirect(url_for('profile'))
+
+    delete_avatar_file(old_filename)
+    flash("Your profile photo has been updated.", "success")
+    return redirect(url_for('profile'))
+
+
+@app.route('/profile/photo/remove', methods=['POST'])
+@login_required
+def remove_photo():
+    user = current_user._get_current_object()
+    old_filename = user.profile_image
+
+    if not old_filename:
+        flash("You don't have a profile photo to remove.", "error")
+        return redirect(url_for('profile'))
+
+    try:
+        user.profile_image = None
+        db.session.commit()
+    except Exception:
+        db.session.rollback()
+        app.logger.exception("Failed to remove profile photo")
+        flash("Unable to remove your photo. Please try again.", "error")
+        return redirect(url_for('profile'))
+
+    delete_avatar_file(old_filename)
+    flash("Your profile photo has been removed.", "success")
+    return redirect(url_for('profile'))
+
 
 @app.route('/logout')
 @login_required

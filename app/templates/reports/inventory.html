@@ -1,0 +1,399 @@
+{% extends "base.html" %}
+
+{% block title %}Inventory Report | StockFlow{% endblock %}
+
+{% block content %}
+<section class="ad-page">
+
+    <header class="ad-header">
+        <div>
+            <h1>Inventory Report</h1>
+            <p>Your stock right now, plus every stock in and stock out.</p>
+        </div>
+
+        <div class="ad-header-badges no-print">
+            <a href="{{ url_for('reports') }}" class="ad-badge ad-badge-blue">
+                <i class="fa-solid fa-arrow-left"></i>
+                <span>All Reports</span>
+            </a>
+            <button type="button" class="ad-badge ad-badge-amber" onclick="window.print()">
+                <i class="fa-solid fa-print"></i>
+                <span>Print</span>
+            </button>
+        </div>
+    </header>
+
+    <div class="ad-stats">
+
+        <div class="ad-stat">
+            <span class="ad-stat-icon ad-ic-blue"><i class="fa-solid fa-box"></i></span>
+            <div class="ad-stat-body">
+                <span class="ad-stat-label">Total Products</span>
+                <strong class="ad-stat-value">{{ products|length }}</strong>
+                <small class="ad-stat-sub">Registered in the system</small>
+            </div>
+        </div>
+
+        <div class="ad-stat">
+            <span class="ad-stat-icon ad-ic-violet"><i class="fa-solid fa-boxes-stacked"></i></span>
+            <div class="ad-stat-body">
+                <span class="ad-stat-label">Current Stock</span>
+                <strong class="ad-stat-value">{{ total_units }}</strong>
+                <small class="ad-stat-sub">Units in inventory</small>
+            </div>
+        </div>
+
+        <div class="ad-stat ad-stat-warn">
+            <span class="ad-stat-icon ad-ic-amber"><i class="fa-solid fa-triangle-exclamation"></i></span>
+            <div class="ad-stat-body">
+                <span class="ad-stat-label">Low Stock</span>
+                <strong class="ad-stat-value">{{ low_products|length }}</strong>
+                <small class="ad-stat-sub">{{ out_count }} out of stock</small>
+            </div>
+        </div>
+
+        <div class="ad-stat">
+            <span class="ad-stat-icon ad-ic-green"><i class="fa-solid fa-naira-sign"></i></span>
+            <div class="ad-stat-body">
+                <span class="ad-stat-label">Stock Value</span>
+                <strong class="ad-stat-value rp-money">₦{{ "{:,.2f}".format(stock_value) }}</strong>
+                <small class="ad-stat-sub">
+                    {% if missing_cost %}{{ missing_cost }} without a purchase price{% else %}At purchase price{% endif %}
+                </small>
+            </div>
+        </div>
+
+    </div>
+
+    <div class="rp-stack">
+
+        <section class="ad-panel">
+            <div class="ad-panel-head">
+                <h2><i class="fa-solid fa-heart-pulse"></i> Stock Health</h2>
+                <span class="ad-count">{{ products|length }} product{{ '' if products|length == 1 else 's' }}</span>
+            </div>
+
+            {% if products %}
+            <div class="rp-health" role="img"
+                 aria-label="{{ in_count }} in stock, {{ low_only }} low stock, {{ out_count }} out of stock">
+                <span class="rp-health-in" style="--n: {{ in_count }}"></span>
+                <span class="rp-health-low" style="--n: {{ low_only }}"></span>
+                <span class="rp-health-out" style="--n: {{ out_count }}"></span>
+            </div>
+
+            <div class="rp-legend">
+                <span><i class="rp-health-in"></i> In stock: {{ in_count }}</span>
+                <span><i class="rp-health-low"></i> Low stock: {{ low_only }}</span>
+                <span><i class="rp-health-out"></i> Out of stock: {{ out_count }}</span>
+            </div>
+            {% else %}
+            <div class="ad-empty">
+                <i class="fa-solid fa-box-open"></i>
+                <span>No products yet.</span>
+            </div>
+            {% endif %}
+        </section>
+
+        <section class="ad-panel">
+            <div class="ad-panel-head">
+                <h2><i class="fa-solid fa-boxes-stacked"></i> Current Stock</h2>
+                <span class="ad-count" id="invCount">{{ products|length }} product{{ '' if products|length == 1 else 's' }}</span>
+            </div>
+
+            {% if products %}
+            <div class="rp-stock-tools no-print">
+                <label class="rp-search">
+                    <i class="fa-solid fa-magnifying-glass"></i>
+                    <input type="search" id="invSearch" placeholder="Search products..." autocomplete="off">
+                </label>
+
+                <div class="rp-chips">
+                    <button type="button" class="rp-chip active" data-status-chip="all">All</button>
+                    <button type="button" class="rp-chip" data-status-chip="in">In Stock</button>
+                    <button type="button" class="rp-chip" data-status-chip="low">Low Stock</button>
+                    <button type="button" class="rp-chip" data-status-chip="out">Out of Stock</button>
+                </div>
+            </div>
+
+            <div class="ad-table-wrap">
+                <table class="ad-table" id="invTable">
+                    <thead>
+                        <tr>
+                            <th>Product</th>
+                            <th>Category</th>
+                            <th>Supplier</th>
+                            <th>In Stock</th>
+                            <th>Status</th>
+                            <th>Stock Value</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for product in products %}
+                        {% if product.quantity <= 0 %}
+                            {% set status = 'out' %}
+                        {% elif product.quantity <= low_level %}
+                            {% set status = 'low' %}
+                        {% else %}
+                            {% set status = 'in' %}
+                        {% endif %}
+                        <tr data-name="{{ product.name|lower }}" data-status="{{ status }}">
+                            <td data-label="Product" class="ad-name">{{ product.name }}</td>
+                            <td data-label="Category">{{ product.category.name if product.category else 'N/A' }}</td>
+                            <td data-label="Supplier">{{ product.supplier.full_name if product.supplier else 'N/A' }}</td>
+                            <td data-label="In Stock"><strong>{{ product.quantity }}</strong></td>
+                            <td data-label="Status">
+                                {% if status == 'out' %}
+                                    <span class="rp-pill rp-pill-outstock">Out of Stock</span>
+                                {% elif status == 'low' %}
+                                    <span class="rp-pill rp-pill-lowstock">Low Stock</span>
+                                {% else %}
+                                    <span class="rp-pill rp-pill-instock">In Stock</span>
+                                {% endif %}
+                            </td>
+                            <td data-label="Stock Value" class="ad-amount">
+                                {% if product.purchase_price is not none %}
+                                    ₦{{ "{:,.2f}".format(product.quantity * product.purchase_price) }}
+                                {% else %}
+                                    <span class="rp-muted">No purchase price</span>
+                                {% endif %}
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+
+            <div class="ad-empty rp-table-gap" id="invNoResults" hidden>
+                <i class="fa-solid fa-magnifying-glass"></i>
+                <span>No products match your search.</span>
+            </div>
+            {% else %}
+            <div class="ad-empty">
+                <i class="fa-solid fa-box-open"></i>
+                <span>No products yet.</span>
+            </div>
+            {% endif %}
+        </section>
+
+        <section class="ad-panel">
+            <div class="ad-panel-head">
+                <h2><i class="fa-solid fa-triangle-exclamation ad-warn-icon"></i> Low-Stock Products</h2>
+                <span class="ad-count">{{ low_products|length }} product{{ '' if low_products|length == 1 else 's' }} at {{ low_level }} or fewer</span>
+            </div>
+
+            {% if low_products %}
+            <div class="ad-table-wrap">
+                <table class="ad-table">
+                    <thead>
+                        <tr>
+                            <th>Product</th>
+                            <th>Category</th>
+                            <th>Quantity Left</th>
+                            <th>Status</th>
+                            <th class="no-print">Action</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for product in low_products %}
+                        <tr>
+                            <td data-label="Product" class="ad-name">{{ product.name }}</td>
+                            <td data-label="Category">{{ product.category.name if product.category else 'N/A' }}</td>
+                            <td data-label="Quantity Left"><strong>{{ product.quantity }}</strong></td>
+                            <td data-label="Status">
+                                {% if product.quantity <= 0 %}
+                                    <span class="rp-pill rp-pill-outstock">Out of Stock</span>
+                                {% else %}
+                                    <span class="rp-pill rp-pill-lowstock">Low Stock</span>
+                                {% endif %}
+                            </td>
+                            <td data-label="Action" class="no-print">
+                                <a href="{{ url_for('add_stock', product_id=product.id) }}" class="ad-btn-view">
+                                    <i class="fa-solid fa-plus"></i> Restock
+                                </a>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            {% else %}
+            <div class="ad-empty ad-empty-good">
+                <i class="fa-solid fa-circle-check"></i>
+                <span>All products have sufficient stock.</span>
+            </div>
+            {% endif %}
+        </section>
+
+        <section class="ad-panel" id="history">
+            <div class="ad-panel-head">
+                <h2><i class="fa-solid fa-clock-rotate-left"></i> Stock History</h2>
+                <span class="ad-count">{{ range_label }}</span>
+            </div>
+
+            <div class="rp-filters rp-filters-flat no-print">
+                <div class="rp-filter-row">
+                    <nav class="rp-chips" aria-label="History period">
+                        {% for key, label in periods %}
+                        <a href="{{ url_for('inventory_report', period=key, history=history, _anchor='history') }}"
+                           class="rp-chip {% if not is_custom and period == key %}active{% endif %}">{{ label }}</a>
+                        {% endfor %}
+                    </nav>
+
+                    <form method="get" action="{{ url_for('inventory_report', _anchor='history') }}" class="rp-range">
+                        <input type="hidden" name="history" value="{{ history }}">
+                        <label>
+                            From
+                            <input type="date" name="from" value="{{ start_date.isoformat() }}" max="{{ today.isoformat() }}" required>
+                        </label>
+                        <label>
+                            To
+                            <input type="date" name="to" value="{{ end_date.isoformat() }}" max="{{ today.isoformat() }}" required>
+                        </label>
+                        <button type="submit" class="rp-apply">Apply</button>
+                    </form>
+                </div>
+            </div>
+
+            <div class="rp-summary">
+                <div class="rp-sum rp-sum-in">
+                    <small>Stock In</small>
+                    <strong>+{{ in_totals.units }} units</strong>
+                    <em>{{ in_totals.count }} movement{{ '' if in_totals.count == 1 else 's' }}</em>
+                </div>
+                <div class="rp-sum rp-sum-out">
+                    <small>Stock Out</small>
+                    <strong>-{{ out_totals.units }} units</strong>
+                    <em>{{ out_totals.count }} movement{{ '' if out_totals.count == 1 else 's' }}</em>
+                </div>
+                <div class="rp-sum rp-sum-net">
+                    <small>Net Change</small>
+                    <strong>{{ '+' if net_units > 0 else '' }}{{ net_units }} units</strong>
+                    <em>In minus out</em>
+                </div>
+            </div>
+
+            <div class="rp-tabs no-print">
+                <a href="{{ url_for('inventory_report', history='in', _anchor='history', **range_args) }}"
+                   class="rp-tab in {% if history == 'in' %}active{% endif %}">
+                    <i class="fa-solid fa-arrow-down"></i> Stock In <span>{{ in_totals.count }}</span>
+                </a>
+                <a href="{{ url_for('inventory_report', history='out', _anchor='history', **range_args) }}"
+                   class="rp-tab out {% if history == 'out' %}active{% endif %}">
+                    <i class="fa-solid fa-arrow-up"></i> Stock Out <span>{{ out_totals.count }}</span>
+                </a>
+            </div>
+
+            {% if pagination.items %}
+            <div class="ad-table-wrap">
+                <table class="ad-table">
+                    <thead>
+                        <tr>
+                            <th>Date</th>
+                            <th>Product</th>
+                            <th>Quantity</th>
+                            <th>Reason</th>
+                            <th>Recorded By</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for movement in pagination.items %}
+                        <tr>
+                            <td data-label="Date" class="rp-date">{{ movement.movement_date|local_time }}</td>
+                            <td data-label="Product" class="ad-name">
+                                {{ movement.product.name if movement.product else 'Deleted product' }}
+                            </td>
+                            <td data-label="Quantity" class="{{ 'rp-qty-in' if history == 'in' else 'rp-qty-out' }}">
+                                {{ '+' if history == 'in' else '-' }}{{ movement.quantity }}
+                            </td>
+                            <td data-label="Reason" class="rp-reason">{{ movement.reason }}</td>
+                            <td data-label="Recorded By">
+                                {{ movement.user.full_name if movement.user else 'Online customer' }}
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+
+            <p class="ad-more">
+                Showing {{ pagination.first }} to {{ pagination.last }} of {{ pagination.total }}
+            </p>
+
+            {% if pagination.pages > 1 %}
+            <nav class="rp-pager no-print" aria-label="Stock history pages">
+                {% if pagination.has_prev %}
+                <a href="{{ url_for('inventory_report', page=pagination.prev_num, history=history, _anchor='history', **range_args) }}" class="rp-page-btn">
+                    <i class="fa-solid fa-arrow-left"></i> Previous
+                </a>
+                {% else %}
+                <span class="rp-page-btn is-disabled"><i class="fa-solid fa-arrow-left"></i> Previous</span>
+                {% endif %}
+
+                <span class="rp-page-info">Page {{ pagination.page }} of {{ pagination.pages }}</span>
+
+                {% if pagination.has_next %}
+                <a href="{{ url_for('inventory_report', page=pagination.next_num, history=history, _anchor='history', **range_args) }}" class="rp-page-btn">
+                    Next <i class="fa-solid fa-arrow-right"></i>
+                </a>
+                {% else %}
+                <span class="rp-page-btn is-disabled">Next <i class="fa-solid fa-arrow-right"></i></span>
+                {% endif %}
+            </nav>
+            {% endif %}
+            {% else %}
+            <div class="ad-empty">
+                <i class="fa-solid {{ 'fa-arrow-down' if history == 'in' else 'fa-arrow-up' }}"></i>
+                <span>No stock {{ 'in' if history == 'in' else 'out' }} recorded in this period.</span>
+            </div>
+            {% endif %}
+        </section>
+
+    </div>
+
+</section>
+
+<script>
+    (function () {
+        const search = document.getElementById('invSearch');
+
+        if (!search) return;
+
+        const chips = Array.from(document.querySelectorAll('[data-status-chip]'));
+        const rows = Array.from(document.querySelectorAll('#invTable tbody tr'));
+        const count = document.getElementById('invCount');
+        const empty = document.getElementById('invNoResults');
+        let active = 'all';
+
+        function apply() {
+            const term = search.value.trim().toLowerCase();
+            let shown = 0;
+
+            rows.forEach(function (row) {
+                const matches = (!term || row.dataset.name.includes(term))
+                    && (active === 'all' || row.dataset.status === active);
+
+                row.hidden = !matches;
+
+                if (matches) shown += 1;
+            });
+
+            count.textContent = shown + ' product' + (shown === 1 ? '' : 's');
+            empty.hidden = shown !== 0;
+        }
+
+        search.addEventListener('input', apply);
+
+        chips.forEach(function (chip) {
+            chip.addEventListener('click', function () {
+                active = chip.dataset.statusChip;
+
+                chips.forEach(function (item) {
+                    item.classList.toggle('active', item === chip);
+                });
+
+                apply();
+            });
+        });
+    })();
+</script>
+{% endblock %}
