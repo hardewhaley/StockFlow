@@ -30,9 +30,9 @@
     {% set show_sidebar = current_user.is_authenticated and current_user.role in ['admin', 'staff'] %}
     {% set photo = avatar_url(current_user) if current_user.is_authenticated else None %}
 
-    {% set cart_count = namespace(total=0) %}
+    {% set nav_cart = namespace(total=0) %}
     {% for quantity in session.get('cart', {}).values() %}
-        {% set cart_count.total = cart_count.total + (quantity | int) %}
+        {% set nav_cart.total = nav_cart.total + (quantity | int) %}
     {% endfor %}
 
     {% if current_user.is_authenticated and current_user.role == 'customer' %}
@@ -80,7 +80,7 @@
                         <i class="fa-solid fa-boxes-stacked"></i><span>Stock</span>
                     </a>
                     <a href="{{ url_for('reports') }}"
-                       class="nav-link {% if request.endpoint in ['reports', 'sales_report'] %}active{% endif %}">
+                       class="nav-link {% if request.endpoint in ['reports', 'sales_report', 'inventory_report'] %}active{% endif %}">
                         <i class="fa-solid fa-chart-line"></i><span>Reports</span>
                     </a>
                     <a href="{{ url_for('staff_list') }}"
@@ -179,8 +179,8 @@
                        class="cn-cart {% if request.endpoint == 'cart' %}active{% endif %}"
                        aria-label="Cart">
                         <i class="fa-solid fa-cart-shopping"></i>
-                        {% if cart_count.total > 0 %}
-                            <span class="cn-cart-badge">{{ cart_count.total }}</span>
+                        {% if nav_cart.total > 0 %}
+                            <span class="cn-cart-badge">{{ nav_cart.total }}</span>
                         {% endif %}
                     </a>
 
@@ -221,9 +221,11 @@
                     </p>
                 {% elif not current_user.is_authenticated %}
                     <p class="footer-links">
-                        <a href="{{ url_for('staff_login') }}">Staff Login</a>
+                        <a href="{{ url_for('shop') }}">Shop</a>
                         <span>&middot;</span>
-                        <a href="{{ url_for('login') }}">Admin Login</a>
+                        <a href="{{ url_for('customer_login') }}">Login</a>
+                        <span>&middot;</span>
+                        <a href="{{ url_for('customer_register') }}">Register</a>
                     </p>
                 {% endif %}
             </footer>

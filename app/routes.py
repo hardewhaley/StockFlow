@@ -495,6 +495,23 @@ def file_too_large(error):
     flash("That image is too large. Please choose one under 10 MB.", "error")
     return redirect(url_for('profile'))
 
+STAFF_AREA_PREFIXES = (
+    '/admin', '/suppliers', '/reports', '/products',
+    '/categories', '/customers', '/stock', '/sales'
+)
+
+
+@app.login_manager.unauthorized_handler
+def unauthorized():
+    flash("Please log in to continue.", "info")
+
+    if request.path.startswith('/staff'):
+        return redirect(url_for('staff_login', next=request.path))
+
+    if request.path.startswith(STAFF_AREA_PREFIXES):
+        return redirect(url_for('login', next=request.path))
+
+    return redirect(url_for('customer_login', next=request.path))
 
 @app.route('/')
 def home():
