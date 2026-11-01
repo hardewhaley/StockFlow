@@ -9,14 +9,14 @@ from decimal import Decimal, InvalidOperation
 
 from flask import render_template, redirect, flash, url_for, session, request, abort, jsonify
 from flask_login import login_user, logout_user, login_required, current_user
-from flask_mail import Message
+
 from PIL import Image, ImageOps, UnidentifiedImageError
 from sqlalchemy import func, or_, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import joinedload, selectinload
 from werkzeug.security import check_password_hash, generate_password_hash
 
-from app import app, db, mail
+from app import app, db, send_email
 from app.forms import LoginForm, StaffForm, CustomerRegistrationForm, CustomerOTPForm, StaffLoginForm
 from app.models import User, Customer, Product, Supplier, Category, StockMovement, Sale, SaleItem
 
@@ -604,23 +604,29 @@ def contact_message():
         else "Sent by a visitor who was not logged in"
     )
 
-    mail_message = Message(
-        subject=f"New message from {name} via StockFlow",
-        sender=app.config['MAIL_USERNAME'],
-        recipients=[recipient],
-        reply_to=email
-    )
-    mail_message.body = (
-        f"You have a new message from your StockFlow website.\n\n"
-        f"Name: {name}\n"
-        f"Email: {email}\n"
-        f"{account_line}\n\n"
-        f"Message:\n{message_text}\n\n"
-        f"Press Reply to answer {name} directly."
-    )
-
+    
     try:
-        mail.send(mail_message)
+        send_email(
+            subject=f"New message from {name} via StockFlow",
+            recipients=[recipient],
+            reply_to=email,
+            text_content=(
+                f"You have a new message from your StockFlow website.\n\n"
+                f"Name: {name}\n"
+                f"Email: {email}\n"
+                f"{account_line}\n\n"
+                f"Message:\n{message_text}\n\n"
+                f"Press Reply to answer {name} directly."
+            )
+        )
+
+    except Exception:
+        app.logger.exception("Contact message failed")
+        return jsonify(
+            ok=False,
+            message="We couldn't send your message. Please try again or call us."
+        ), 500
+
     except Exception:
         app.logger.exception("Contact message failed")
         return jsonify(
@@ -1205,25 +1211,27 @@ def customer_register():
 
         otp = str(secrets.randbelow(900000) + 100000)
 
-        message = Message(
-            subject='StockFlow - Verify Your Email',
-            sender=app.config['MAIL_USERNAME'],
-            recipients=[email]
-        )
-        message.body = (
-            f"Hello {full_name},\n\n"
-            "Welcome to StockFlow!\n"
-            f"Your email verification OTP is: {otp}\n"
-            "This OTP will expire in 10 minutes.\n\n"
-            "If you did not create a StockFlow account, you can ignore this email.\n\n"
-            "StockFlow"
-        )
-
         try:
-            mail.send(message)
+            send_email(
+                subject='StockFlow - Verify Your Email',
+                recipients=[email],
+                text_content=(
+                    f"Hello {full_name},\n\n"
+                    "Welcome to StockFlow!\n"
+                    f"Your email verification OTP is: {otp}\n"
+                    "This OTP will expire in 10 minutes.\n\n"
+                    "If you did not create a StockFlow account, "
+                    "you can ignore this email.\n\n"
+                    "StockFlow"
+                )
+            )
+
         except Exception:
             app.logger.exception("OTP email failed")
-            flash("We couldn't send the verification email. Please try again.", "error")
+            flash(
+                "We couldn't send the verification email. Please try again.",
+                "error"
+            )
             return redirect(url_for('customer_register'))
 
         session['customer_registration'] = {
@@ -1552,12 +1560,10 @@ def create_staff():
             db.session.add(staff)
             db.session.flush()
 
-            message = Message(
+            send_email(
                 subject='Your StockFlow Staff Account',
-                sender=app.config['MAIL_USERNAME'],
-                recipients=[email]
-            )
-            message.body = f"""Hello {full_name},
+                recipients=[email],
+                text_content=f"""Hello {full_name},
 
 Your StockFlow staff account has been created.
 
@@ -1570,7 +1576,8 @@ Keep your staff code private.
 Regards,
 StockFlow Team
 """
-            mail.send(message)
+            )
+
             db.session.commit()
 
         except IntegrityError:
